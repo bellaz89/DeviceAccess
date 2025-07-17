@@ -6,58 +6,38 @@
 #include "Exception.h"
 
 #include <sys/mman.h>
+#include <boost/filesystem/directory.hpp>
 
 #include <fcntl.h>
 #include <poll.h>
+#include <unistd.h>
 
 #include <cerrno>
-#include <fstream>
-#include <limits>
 
 namespace ChimeraTK {
 
-  UioAccess::UioAccess(const std::string& deviceFilePath) : _deviceFilePath(deviceFilePath.c_str()) {}
+  UioAccess::UioMap::UioMap(int deviceFileDescriptor, size_t uioMapIdx, std::string& uioMapPath) {
+    _deviceKernelBase = (void*)readUint64HexFromFile(uioMapPath + "/addr");
+    _deviceMemSize = readUint64HexFromFile(uioMapPath + "/size");
+    _deviceUserBase = mmap(NULL, _deviceMemSize, PROT_READ | PROT_WRITE, MAP_SHARED,
+                           _deviceFileDescriptor, uioMapIdx * getpagesize());
 
-  UioAccess::~UioAccess() {
-    close();
-  }
-
-  void UioAccess::open() {
-    if(boost::filesystem::is_symlink(_deviceFilePath)) {
-      _deviceFilePath = boost::filesystem::canonical(_deviceFilePath);
-    }
-    std::string fileName = _deviceFilePath.filename().string();
-    _deviceKernelBase = (void*)readUint64HexFromFile("/sys/class/uio/" + fileName + "/maps/map0/addr");
-    _deviceMemSize = readUint64HexFromFile("/sys/class/uio/" + fileName + "/maps/map0/size");
-    _lastInterruptCount = readUint32FromFile("/sys/class/uio/" + fileName + "/event");
-
-    // Open UIO device file here, so that interrupt thread can run before calling open()
-    _deviceFileDescriptor = ::open(_deviceFilePath.c_str(), O_RDWR);
-    if(_deviceFileDescriptor < 0) {
-      throw ChimeraTK::runtime_error("UIO: Failed to open device file '" + getDeviceFilePath() + "'");
-    }
-    UioMMap();
-    _opened = true;
-  }
-
-  void UioAccess::close() {
-    if(_opened) {
-      UioUnmap();
-      ::close(_deviceFileDescriptor);
-      _opened = false;
+    if(_deviceUserBase == MAP_FAILED) {
+      ::close(deviceFileDescriptor);
+      throw ChimeraTK::runtime_error("UIO: Cannot allocate memory for UIO map '" + uioMapPath + "'");
     }
   }
 
-  void UioAccess::read(uint64_t map, uint64_t address, int32_t* __restrict__ data, size_t sizeInBytes) {
-    if(map > 0) {
-      throw ChimeraTK::logic_error("UIO: Multiple memory regions are not supported");
-    }
+  UioAccess::UioMap::~UioMap() {
+    munmap(_deviceUserBase, _deviceMemSize);
+  }
 
+  void UioAccess::UioMap::read(uint64_t address, int32_t* data, size_t sizeInBytes) {
     // This is a temporary work around, because register nodes of current map use absolute bus addresses.
     address = address % reinterpret_cast<uint64_t>(_deviceKernelBase);
 
     if(address + sizeInBytes > _deviceMemSize) {
-      throw ChimeraTK::logic_error("UIO: Read request exceeds device memory region");
+      throw ChimeraTK::logic_error("UIO: Write request exceeds device memory region");
     }
 
     volatile int32_t* rptr = static_cast<volatile int32_t*>(_deviceUserBase) + address / sizeof(int32_t);
@@ -67,11 +47,7 @@ namespace ChimeraTK {
     }
   }
 
-  void UioAccess::write(uint64_t map, uint64_t address, int32_t const* data, size_t sizeInBytes) {
-    if(map > 0) {
-      throw ChimeraTK::logic_error("UIO: Multiple memory regions are not supported");
-    }
-
+  void UioAccess::UioMap::write(uint64_t address, int32_t const* data, size_t sizeInBytes) {
     // This is a temporary work around, because register nodes of current map use absolute bus addresses.
     address = address % reinterpret_cast<uint64_t>(_deviceKernelBase);
 
@@ -84,6 +60,65 @@ namespace ChimeraTK {
       *(wptr++) = *(data++);
       sizeInBytes -= sizeof(int32_t);
     }
+  }
+
+  UioAccess::UioAccess(const std::string& deviceFilePath) : _deviceFilePath(deviceFilePath.c_str()) {}
+
+  UioAccess::~UioAccess() {
+    close();
+  }
+
+  void UioAccess::open() {
+    if(boost::filesystem::is_symlink(_deviceFilePath)) {
+      _deviceFilePath = boost::filesystem::canonical(_deviceFilePath);
+    }
+    std::string fileName = _deviceFilePath.filename().string();
+     _lastInterruptCount = readUint32FromFile("/sys/class/uio/" + fileName + "/event");
+
+    // Open UIO device file here, so that interrupt thread can run before calling open()
+    _deviceFileDescriptor = ::open(_deviceFilePath.c_str(), O_RDWR);
+    if(_deviceFileDescriptor < 0) {
+      throw ChimeraTK::runtime_error("UIO: Failed to open device file '" + getDeviceFilePath() + "'");
+    }
+    
+    while (true) {
+      std::string uioMapPath = "/sys/class/uio/" + fileName + "/maps/map" + to_string(_maps.size());
+      if(!boost::filesystem::is_directory(uioMapPath)) break;
+      _maps.push_back(UioAccess::UioMap(_deviceFileDescriptor), _maps.size(), uioMapPath)
+    }
+   
+    _opened = true;
+  }
+
+  void UioAccess::close() {
+    if(_opened) {
+      _maps.clear();
+      ::close(_deviceFileDescriptor);
+      _opened = false;
+    }
+  }
+
+  bool UioAccess::mapIndexValid(uint64_t map) {
+    return map < _maps.size();
+  }
+
+  void UioAccess::read(uint64_t map, uint64_t address, int32_t* __restrict__ data, size_t sizeInBytes) {
+    if(!mapIndexValid(map)) {
+      throw ChimeraTK::logic_error("UIO: Attempt to access map" + std::to_string(map) + 
+                                   " outside the range (registered maps = " + to_string(maps.size()) + ")");
+    }
+
+    _maps[map].read(address, data, sizeInBytes)
+  }
+
+  void UioAccess::write(uint64_t map, uint64_t address, int32_t const* data, size_t sizeInBytes) {
+    if(!mapIndexValid(map)) {
+      throw ChimeraTK::logic_error("UIO: Attempt to access map" + std::to_string(map) + 
+                                   " outside the range (registered maps = " + to_string(maps.size()) + ")");
+    }
+
+    _maps[map].write(address, data, sizeInBytes)
+
   }
 
   uint32_t UioAccess::waitForInterrupt(int timeoutMs) {
@@ -131,19 +166,6 @@ namespace ChimeraTK {
 
   std::string UioAccess::getDeviceFilePath() {
     return _deviceFilePath.string();
-  }
-
-  void UioAccess::UioMMap() {
-    _deviceUserBase = mmap(NULL, _deviceMemSize, PROT_READ | PROT_WRITE, MAP_SHARED, _deviceFileDescriptor, 0);
-    if(_deviceUserBase == MAP_FAILED) {
-      ::close(_deviceFileDescriptor);
-      throw ChimeraTK::runtime_error("UIO: Cannot allocate memory for UIO device '" + getDeviceFilePath() + "'");
-    }
-    return;
-  }
-
-  void UioAccess::UioUnmap() {
-    munmap(_deviceUserBase, _deviceMemSize);
   }
 
   uint32_t UioAccess::subtractUint32OverflowSafe(uint32_t minuend, uint32_t subtrahend) {
