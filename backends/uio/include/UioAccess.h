@@ -7,24 +7,40 @@
 #include <atomic>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace ChimeraTK {
   /// @brief Implements a generic userspace interface for UIO devices.
   class UioAccess {
    private:
-    boost::filesystem::path _deviceFilePath;
+    /// @brief Implements map interface for UIO devices .
+    class UioMap {
+     public:
+      UioMap(int deviceFileDescriptor, size_t uioMapIdx, std::string& uioMapPath);
+      ~UioMap();
+      /// @brief Read data from the specified memory offset address. The address range starts at '0'.
+      /// @param address Start address of memory to read from
+      /// @param data Address pointer to which data is to be copied
+      /// @param sizeInBytes Number of bytes to copy
+      void read(uint64_t address, int32_t* data, size_t sizeInBytes);
+
+      /// @brief Write data to the specified memory offset address. The address range starts at '0'.
+      /// @param address Start address of memory to write to
+      /// @param data Address pointer from which data is to be copied
+      /// @param sizeInBytes Number of bytes to copy
+      void write(uint64_t address, int32_t const* data, size_t sizeInBytes);
+     
+     private:
+      void* _deviceUserBase = nullptr;
+      void* _deviceKernelBase = nullptr;
+      size_t _deviceMemSize = 0;
+    };
+
     int _deviceFileDescriptor = 0;
-    void* _deviceUserBase = nullptr;
-    void* _deviceKernelBase = nullptr;
-    size_t _deviceMemSize = 0;
+    boost::filesystem::path _deviceFilePath; 
+    std::vector<UioMap> _maps;
     uint32_t _lastInterruptCount = 0;
     std::atomic<bool> _opened{false};
-
-    /// @brief Maps user space memory range to address range of UIO device.
-    void UioMMap();
-
-    /// @brief Unmaps user space memory range for address range of UIO device.
-    void UioUnmap();
 
     /// @brief Subtracts uint32_t values taking overflow into account.
     /// @param minuend Minuend of subtraction
@@ -51,6 +67,9 @@ namespace ChimeraTK {
 
     /// @brief Closes UIO device.
     void close();
+
+    // @brief check whether the passed map is valid
+    bool mapIndexValid(uint64_t map);
 
     /// @brief Read data from the specified memory offset address. The address range starts at '0'.
     /// @param map Selected UIO memory region. Only region '0' is currently supported.
