@@ -2,13 +2,19 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #pragma once
 
+// The mainline kernel linux define the maximum number of UIO maps as 5
+#ifndef MAX_UIO_MAPS
+#  define MAX_UIO_MAPS 5
+#endif
+
 #include <boost/filesystem.hpp>
 
+#include <array>
 #include <atomic>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
-#include <vector>
 
 namespace ChimeraTK {
   /// @brief Implements a generic userspace interface for UIO devices.
@@ -17,7 +23,7 @@ namespace ChimeraTK {
     /// @brief Implements map interface for UIO devices .
     class UioMap {
      public:
-      UioMap(int deviceFileDescriptor, size_t uioMapIdx, std::string uioMapPath);
+      UioMap(int deviceFileDescriptor, size_t uioMapIdx, const std::string& uioMapPath);
       ~UioMap();
       UioMap(const UioMap&) = delete;
       UioMap& operator=(const UioMap&) = delete;
@@ -35,21 +41,26 @@ namespace ChimeraTK {
       /// @param sizeInBytes Number of bytes to copy
       void write(uint64_t address, int32_t const* data, size_t sizeInBytes);
 
+      /// @brief Calculate the address from the perspective of the UIO map
+      /// @param address Start address of memory of the request
+      /// @param sizeInBytes Number of bytes to copy
+      /// @param isWrite Determines if it is a read or a write request
+      /// @return Unsigned value
+      size_t checkMapAddress(uint64_t address, size_t sizeInBytes, bool isWrite);
+
      private:
-      void ensureMapped();
-      int _deviceFileDescriptor = 0;
-      size_t _uioMapIdx = 0;
-      std::string _uioMapPath;
+      size_t _deviceLowerBound = 0;
+      size_t _deviceHigherBound = 0;
       void* _deviceUserBase = nullptr;
-      void* _deviceKernelBase = nullptr;
-      size_t _deviceMemSize = 0;
     };
 
     int _deviceFileDescriptor = 0;
-    boost::filesystem::path _deviceFilePath; 
-    std::vector<UioMap> _maps;
+    boost::filesystem::path _deviceFilePath;
+    std::string _filename;
+    std::array<std::optional<UioMap>, MAX_UIO_MAPS> _maps;
     uint32_t _lastInterruptCount = 0;
     std::atomic<bool> _opened{false};
+    uint8_t _maps_number = 0;
 
     /// @brief Subtracts uint32_t values taking overflow into account.
     /// @param minuend Minuend of subtraction
@@ -66,6 +77,11 @@ namespace ChimeraTK {
     /// @param fileName File path to read from
     /// @return Unsigned value
     static uint64_t readUint64HexFromFile(std::string fileName);
+
+    /// @brief Get an UIO map handle
+    /// @param map The map to open
+    /// @return Reference to the opened map
+    UioAccess::UioMap& getMap(size_t map);
 
    public:
     explicit UioAccess(const std::string& deviceFilePath);
