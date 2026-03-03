@@ -57,9 +57,6 @@ namespace ChimeraTK {
   }
 
   bool UioBackend::barIndexValid(uint64_t bar) {
-    assert(_opened);
-    checkActiveException();
-
     return _uioAccess->mapIndexValid(bar);
   }
 

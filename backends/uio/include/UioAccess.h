@@ -7,6 +7,7 @@
 #include <atomic>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace ChimeraTK {
@@ -16,8 +17,12 @@ namespace ChimeraTK {
     /// @brief Implements map interface for UIO devices .
     class UioMap {
      public:
-      UioMap(int deviceFileDescriptor, size_t uioMapIdx, std::string& uioMapPath);
+      UioMap(int deviceFileDescriptor, size_t uioMapIdx, std::string uioMapPath);
       ~UioMap();
+      UioMap(const UioMap&) = delete;
+      UioMap& operator=(const UioMap&) = delete;
+      UioMap(UioMap&& other) noexcept;
+      UioMap& operator=(UioMap&&) = delete;
       /// @brief Read data from the specified memory offset address. The address range starts at '0'.
       /// @param address Start address of memory to read from
       /// @param data Address pointer to which data is to be copied
@@ -29,8 +34,12 @@ namespace ChimeraTK {
       /// @param data Address pointer from which data is to be copied
       /// @param sizeInBytes Number of bytes to copy
       void write(uint64_t address, int32_t const* data, size_t sizeInBytes);
-     
+
      private:
+      void ensureMapped();
+      int _deviceFileDescriptor = 0;
+      size_t _uioMapIdx = 0;
+      std::string _uioMapPath;
       void* _deviceUserBase = nullptr;
       void* _deviceKernelBase = nullptr;
       size_t _deviceMemSize = 0;
@@ -51,12 +60,12 @@ namespace ChimeraTK {
     /// @brief Reads a decimal formatted value from a file as unsigned 32-bit integer.
     /// @param fileName File path to read from
     /// @return Unsigned value
-    uint32_t readUint32FromFile(std::string fileName);
+    static uint32_t readUint32FromFile(std::string fileName);
 
     /// @brief Reads a hexadecimal formatted value from a file as unsigned 64-bit integer.
     /// @param fileName File path to read from
     /// @return Unsigned value
-    uint64_t readUint64HexFromFile(std::string fileName);
+    static uint64_t readUint64HexFromFile(std::string fileName);
 
    public:
     explicit UioAccess(const std::string& deviceFilePath);
