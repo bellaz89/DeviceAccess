@@ -12,7 +12,6 @@
 #include <array>
 #include <atomic>
 #include <memory>
-#include <optional>
 #include <string>
 #include <utility>
 
@@ -23,12 +22,16 @@ namespace ChimeraTK {
     /// @brief Implements map interface for UIO devices .
     class UioMap {
      public:
+      UioMap();
       UioMap(int deviceFileDescriptor, size_t uioMapIdx, const std::string& uioMapPath);
       ~UioMap();
       UioMap(const UioMap&) = delete;
       UioMap& operator=(const UioMap&) = delete;
       UioMap(UioMap&& other) noexcept;
-      UioMap& operator=(UioMap&&) = delete;
+      UioMap& operator=(UioMap&&) noexcept;
+
+      explicit operator bool() const;
+
       /// @brief Read data from the specified memory offset address. The address range starts at '0'.
       /// @param address Start address of memory to read from
       /// @param data Address pointer to which data is to be copied
@@ -57,7 +60,7 @@ namespace ChimeraTK {
     int _deviceFileDescriptor = 0;
     boost::filesystem::path _deviceFilePath;
     std::string _filename;
-    std::array<std::optional<UioMap>, MAX_UIO_MAPS> _maps;
+    std::array<UioMap, MAX_UIO_MAPS> _maps;
     uint32_t _lastInterruptCount = 0;
     std::atomic<bool> _opened{false};
     uint8_t _maps_number = 0;
