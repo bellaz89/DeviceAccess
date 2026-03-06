@@ -18,7 +18,7 @@
 
 namespace ChimeraTK {
 
-  UioAccess::UioMap::UioMap() : {}
+  UioAccess::UioMap::UioMap() {}
 
   UioAccess::UioMap::UioMap(int deviceFileDescriptor, size_t uioMapIdx, const std::string& uioMapPath)
   : _deviceLowerBound(readUint64HexFromFile(uioMapPath + "/addr")),
@@ -60,9 +60,8 @@ namespace ChimeraTK {
       this->_deviceHigherBound = std::exchange(other._deviceHigherBound, 0);
       this->_deviceUserBase = std::exchange(other._deviceUserBase, nullptr);
     }
+    return *this;
   }
-  : _deviceLowerBound(other._deviceLowerBound), _deviceHigherBound(other._deviceHigherBound),
-    _deviceUserBase(std::exchange(other._deviceUserBase, nullptr)) {}
 
   UioAccess::UioMap::operator bool() const noexcept {
     return _deviceUserBase != nullptr;
@@ -131,12 +130,24 @@ namespace ChimeraTK {
       _mapsNumber++;
     }
 
+    try {
+      for(uint8_t i = 0; i < _mapsNumber; ++i) {
+        std::string uioMapPath = "/sys/class/uio/" + _fileName + "/maps/map" + std::to_string(i);
+        _maps[i] = UioAccess::UioMap(_deviceFileDescriptor, i, uioMapPath);
+      }
+    }
+    catch(...) {
+      for(auto& map : _maps) map = UioMap{};
+      ::close(_deviceFileDescriptor);
+      throw;
+    }
+
     _opened = true;
   }
 
   void UioAccess::close() {
     if(_opened) {
-      for(auto map& : _maps) map = std::nullopt;
+      for(auto& map : _maps) map = UioMap{};
       ::close(_deviceFileDescriptor);
       _opened = false;
     }
@@ -165,11 +176,6 @@ namespace ChimeraTK {
   }
 
   UioAccess::UioMap& UioAccess::getMap(size_t map) {
-    if(!_maps[map]) [[unlikely]] {
-      std::string uioMapPath = "/sys/class/uio/" + _fileName + "/maps/map" + std::to_string(map);
-      _maps[map] = UioAccess::UioMap(_deviceFileDescriptor, map, uioMapPath);
-    }
-
     return _maps[map];
   }
 
