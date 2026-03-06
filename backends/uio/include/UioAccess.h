@@ -63,7 +63,7 @@ namespace ChimeraTK {
     std::array<UioMap, MAX_UIO_MAPS> _maps;
     uint32_t _lastInterruptCount = 0;
     std::atomic<bool> _opened{false};
-    uint8_t _maps_number = 0;
+    uint8_t _mapsNumber = 0;
 
     /// @brief Subtracts uint32_t values taking overflow into account.
     /// @param minuend Minuend of subtraction

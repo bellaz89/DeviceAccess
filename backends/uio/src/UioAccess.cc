@@ -133,6 +133,18 @@ namespace ChimeraTK {
       _maps_number++;
     }
 
+    try {
+      for(uint8_t i = 0; i < _maps_number; ++i) {
+        std::string uioMapPath = "/sys/class/uio/" + _filename + "/maps/map" + std::to_string(i);
+        _maps[i] = UioAccess::UioMap(_deviceFileDescriptor, i, uioMapPath);
+      }
+    }
+    catch(...) {
+      for(auto& map : _maps) map = UioMap{};
+      ::close(_deviceFileDescriptor);
+      throw;
+    }
+
     _opened = true;
   }
 
