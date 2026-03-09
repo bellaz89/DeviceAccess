@@ -16,6 +16,12 @@
 #ifdef CHIMERATK_HAVE_UIO_BACKEND
 #  include "UioBackend.h"
 #endif
+#ifdef CHIMERATK_HAVE_DIRECTMAPPING_BACKEND
+#  include "DirectMappingBackend.h"
+#endif
+#ifdef CHIMERATK_HAVE_UDMABUF_BACKEND
+#  include "UDmaBufBackend.h"
+#endif
 // Clang tidy reports a false positive. It seems to be case-sensitive although it should not be.
 // clang-format is fixing this correctly.
 // NOLINTNEXTLINE(llvm-include-order)
@@ -179,6 +185,12 @@ namespace ChimeraTK {
 #endif
 #ifdef CHIMERATK_HAVE_UIO_BACKEND
     registerBackendType("uio", &UioBackend::createInstance, {"map"});
+#endif
+#ifdef CHIMERATK_HAVE_DIRECTMAPPING_BACKEND
+    registerBackendType("DirectMapping", &DirectMappingBackend::createInstance, {"map", "size"});
+#endif
+#ifdef CHIMERATK_HAVE_UDMABUF_BACKEND
+    registerBackendType("u-dma-buf", &UDmaBufBackend::createInstance, {"map"});
 #endif
     registerBackendType("dummy", &DummyBackend::createInstance, {"map"});
     registerBackendType("rebot", &RebotBackend::createInstance, {"ip", "port", "map", "timeout"});

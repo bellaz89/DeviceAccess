@@ -49,15 +49,21 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(HAVE_PCIE_BACKEND 1)
   set(HAVE_XDMA_BACKEND 1)
   set(HAVE_UIO_BACKEND 1)
+  set(HAVE_DIRECTMAPPING_BACKEND 1)
+  set(HAVE_UDMABUF_BACKEND 1)
 
   # these options are not exported
   add_compile_definitions(CHIMERATK_HAVE_PCIE_BACKEND)
   add_compile_definitions(CHIMERATK_HAVE_XDMA_BACKEND)
   add_compile_definitions(CHIMERATK_HAVE_UIO_BACKEND)
+  add_compile_definitions(CHIMERATK_HAVE_DIRECTMAPPING_BACKEND)
+  add_compile_definitions(CHIMERATK_HAVE_UDMABUF_BACKEND)
 else()
   set(HAVE_PCIE_BACKEND 0)
   set(HAVE_XDMA_BACKEND 0)
   set(HAVE_UIO_BACKEND 0)
+  set(HAVE_DIRECTMAPPING_BACKEND 0)
+  set(HAVE_UDMABUF_BACKEND 0)
 endif()
 
 # Generate DeviceAccessVersion.h
@@ -79,6 +85,14 @@ endif()
 
 if(HAVE_UIO_BACKEND)
   set(subdirs ${subdirs} backends/uio)
+endif()
+
+if(HAVE_DIRECTMAPPING_BACKEND)
+  set(subdirs ${subdirs} backends/DirectMapping)
+endif()
+
+if(HAVE_UDMABUF_BACKEND)
+  set(subdirs ${subdirs} backends/udmabuf)
 endif()
 
 foreach(subdir ${subdirs})
