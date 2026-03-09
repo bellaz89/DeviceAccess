@@ -16,8 +16,12 @@
 
 namespace ChimeraTK {
 
-  DirectMappingBackend::DirectMappingBackend(std::string devicePath, std::string mapFileName, size_t sizeParam)
-  : NumericAddressedBackend(std::move(mapFileName)), _devicePath(std::move(devicePath)), _sizeParam(sizeParam) {}
+  DirectMappingBackend::DirectMappingBackend(
+      std::string devicePath, std::string mapFileName, size_t sizeParam, uint64_t baseAddrParam)
+  : NumericAddressedBackend(std::move(mapFileName))
+  , _devicePath(std::move(devicePath))
+  , _sizeParam(sizeParam)
+  , _baseAddrParam(baseAddrParam) {}
 
   DirectMappingBackend::~DirectMappingBackend() {
     DirectMappingBackend::closeImpl();
@@ -40,7 +44,19 @@ namespace ChimeraTK {
       }
     }
 
-    return boost::shared_ptr<DeviceBackend>(new DirectMappingBackend(address, parameters["map"], sizeParam));
+    uint64_t baseAddrParam = 0;
+    if(!parameters["base"].empty()) {
+      try {
+        baseAddrParam = std::stoull(parameters["base"], nullptr, 0);
+      }
+      catch(std::exception&) {
+        throw ChimeraTK::logic_error(
+            "DirectMapping: Invalid base parameter '" + parameters["base"] + "'. Use decimal or 0x-prefixed hex.");
+      }
+    }
+
+    return boost::shared_ptr<DeviceBackend>(
+        new DirectMappingBackend(address, parameters["map"], sizeParam, baseAddrParam));
   }
 
   size_t DirectMappingBackend::discoverSize() {
@@ -53,6 +69,10 @@ namespace ChimeraTK {
     }
     throw ChimeraTK::logic_error("DirectMapping: size could not be determined for '" + _devicePath +
         "'. Provide a 'size' parameter in the CDD.");
+  }
+
+  uint64_t DirectMappingBackend::discoverBaseAddress() {
+    return _baseAddrParam;
   }
 
   void DirectMappingBackend::open() {
@@ -70,6 +90,7 @@ namespace ChimeraTK {
     }
 
     _memSize = discoverSize();
+    _baseAddress = discoverBaseAddress();
 
     _mem = mmap(nullptr, _memSize, PROT_READ | PROT_WRITE, MAP_SHARED, _fd, 0);
     if(_mem == MAP_FAILED) {
@@ -106,6 +127,7 @@ namespace ChimeraTK {
     checkActiveException();
 
     (void)bar;
+    address -= _baseAddress;
     if(address + sizeInBytes > _memSize) {
       throw ChimeraTK::logic_error("DirectMapping: Read request exceeds device memory region.");
     }
@@ -118,6 +140,7 @@ namespace ChimeraTK {
     checkActiveException();
 
     (void)bar;
+    address -= _baseAddress;
     if(address + sizeInBytes > _memSize) {
       throw ChimeraTK::logic_error("DirectMapping: Write request exceeds device memory region.");
     }

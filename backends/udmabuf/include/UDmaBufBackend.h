@@ -41,8 +41,6 @@ namespace ChimeraTK {
     uint32_t _syncOffsetLo{0};
     uint32_t _syncSizeLo{0};
 
-    size_t discoverSize() override;
-
     uint64_t readSysfsUint64(const std::string& attr) const;
     void writeSysfsUint64(const std::string& attr, uint64_t value) const;
 
