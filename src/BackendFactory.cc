@@ -187,7 +187,7 @@ namespace ChimeraTK {
     registerBackendType("uio", &UioBackend::createInstance, {"map"});
 #endif
 #ifdef CHIMERATK_HAVE_DIRECTMAPPING_BACKEND
-    registerBackendType("DirectMapping", &DirectMappingBackend::createInstance, {"map", "size"});
+    registerBackendType("DirectMapping", &DirectMappingBackend::createInstance, {"map", "size", "base"});
 #endif
 #ifdef CHIMERATK_HAVE_UDMABUF_BACKEND
     registerBackendType("u-dma-buf", &UDmaBufBackend::createInstance, {"map"});
