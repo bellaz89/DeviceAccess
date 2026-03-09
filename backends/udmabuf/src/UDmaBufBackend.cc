@@ -67,24 +67,17 @@ namespace ChimeraTK {
   /********************************************************************************************************************/
 
   void UDmaBufBackend::open() {
+    // Resolve udev symlink to real device name
     std::filesystem::path devPath(_devicePath);
     if(std::filesystem::is_symlink(devPath)) {
       devPath = std::filesystem::canonical(devPath);
       _devicePath = devPath.string();
       _sysfsBase = "/sys/class/u-dma-buf/" + devPath.filename().string() + "/";
     }
+    // Inject size and base address from sysfs so DirectMappingBackend::open() picks them up
+    _sizeParam = static_cast<size_t>(readSysfsUint64("size"));
+    _baseAddrParam = readSysfsUint64("phys_addr");
     DirectMappingBackend::open();
-  }
-
-  /********************************************************************************************************************/
-
-  size_t UDmaBufBackend::discoverSize() {
-    uint64_t sz = readSysfsUint64("size");
-    if(sz == 0) {
-      throw ChimeraTK::runtime_error(
-          "UDmaBuf: Could not determine buffer size from sysfs for device '" + _devName + "'.");
-    }
-    return static_cast<size_t>(sz);
   }
 
   /********************************************************************************************************************/

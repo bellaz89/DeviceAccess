@@ -13,16 +13,19 @@ namespace ChimeraTK {
   class DirectMappingBackend : public NumericAddressedBackend {
    protected:
     std::string _devicePath;
-    size_t _sizeParam; // from CDD parameter (0 = not given)
+    size_t _sizeParam;      // from CDD parameter (0 = not given)
+    uint64_t _baseAddrParam; // from CDD 'base' parameter (0 = not given)
     int _fd = -1;
     void* _mem = nullptr;
     size_t _memSize = 0;
+    uint64_t _baseAddress = 0; // determined at open time
 
-    // Hook for subclasses to override size discovery
+    // Hooks for subclasses to override size and base address discovery
     virtual size_t discoverSize();
+    virtual uint64_t discoverBaseAddress();
 
    public:
-    DirectMappingBackend(std::string devicePath, std::string mapFileName, size_t sizeParam);
+    DirectMappingBackend(std::string devicePath, std::string mapFileName, size_t sizeParam, uint64_t baseAddrParam = 0);
     ~DirectMappingBackend() override;
 
     static boost::shared_ptr<DeviceBackend> createInstance(
