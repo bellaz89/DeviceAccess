@@ -189,60 +189,55 @@ namespace ChimeraTK {
       throw ChimeraTK::logic_error("udmabuf: BAR 0xff read address out of range.");
     }
 
-    while(sizeInBytes > 0) {
-      switch(address) {
-        case REG_SYNC_MODE:
-          *data = static_cast<int32_t>(readSysfsUint64(_fdSyncMode));
-          address += 4; data += 1; sizeInBytes -= 4;
-          break;
-        case REG_SYNC_DIR:
-          *data = static_cast<int32_t>(readSysfsUint64(_fdSyncDir));
-          address += 4; data += 1; sizeInBytes -= 4;
-          break;
-        case REG_SYNC_OFF: {
-          auto syncOffset = readSysfsUint64(_fdSyncOffset);
-          data[0] = static_cast<int32_t>(syncOffset & 0xFFFFFFFFu);
-          data[1] = static_cast<int32_t>(syncOffset >> 32);
-          address += 8; data += 2; sizeInBytes -= 8;
-          break;
-        }
-        case REG_SYNC_SIZE: {
-          auto syncSize = readSysfsUint64(_fdSyncSize);
-          data[0] = static_cast<int32_t>(syncSize & 0xFFFFFFFFu);
-          data[1] = static_cast<int32_t>(syncSize >> 32);
-          address += 8; data += 2; sizeInBytes -= 8;
-          break;
-        }
-        case REG_SYNC_FOR_CPU:
-        case REG_SYNC_FOR_DEV:
-          *data = 0; // write-only registers: return 0
-          address += 4; data += 1; sizeInBytes -= 4;
-          break;
-        case REG_PHYS_ADDR: {
-          data[0] = static_cast<int32_t>(_baseAddress & 0xFFFFFFFFu);
-          data[1] = static_cast<int32_t>(_baseAddress >> 32);
-          address += 8; data += 2; sizeInBytes -= 8;
-          break;
-        }
-        case REG_BUF_SIZE: {
-          auto bufSize = static_cast<uint64_t>(_memSize);
-          data[0] = static_cast<int32_t>(bufSize & 0xFFFFFFFFu);
-          data[1] = static_cast<int32_t>(bufSize >> 32);
-          address += 8; data += 2; sizeInBytes -= 8;
-          break;
-        }
-        case REG_SYNC_ON_READ:
-          *data = _syncOnRead ? 1 : 0;
-          address += 4; data += 1; sizeInBytes -= 4;
-          break;
-        case REG_SYNC_ON_WRITE:
-          *data = _syncOnWrite ? 1 : 0;
-          address += 4; data += 1; sizeInBytes -= 4;
-          break;
-        default:
-          throw ChimeraTK::logic_error(
-              "udmabuf: BAR 0xff read from unknown register offset " + std::to_string(address));
+    switch(address) {
+      case REG_SYNC_MODE:
+        assert(sizeInBytes == 4);
+        *data = static_cast<int32_t>(readSysfsUint64(_fdSyncMode));
+        break;
+      case REG_SYNC_DIR:
+        assert(sizeInBytes == 4);
+        *data = static_cast<int32_t>(readSysfsUint64(_fdSyncDir));
+        break;
+      case REG_SYNC_OFF: {
+        assert(sizeInBytes == 8);
+        auto syncOffset = readSysfsUint64(_fdSyncOffset);
+        data[0] = static_cast<int32_t>(syncOffset & 0xFFFFFFFFu);
+        data[1] = static_cast<int32_t>(syncOffset >> 32);
+        break;
       }
+      case REG_SYNC_SIZE: {
+        assert(sizeInBytes == 8);
+        auto syncSize = readSysfsUint64(_fdSyncSize);
+        data[0] = static_cast<int32_t>(syncSize & 0xFFFFFFFFu);
+        data[1] = static_cast<int32_t>(syncSize >> 32);
+        break;
+      }
+      case REG_SYNC_FOR_CPU:
+      case REG_SYNC_FOR_DEV:
+        assert(sizeInBytes == 4);
+        *data = 0; // write-only registers: return 0
+        break;
+      case REG_PHYS_ADDR:
+        assert(sizeInBytes == 8);
+        data[0] = static_cast<int32_t>(_baseAddress & 0xFFFFFFFFu);
+        data[1] = static_cast<int32_t>(_baseAddress >> 32);
+        break;
+      case REG_BUF_SIZE:
+        assert(sizeInBytes == 8);
+        data[0] = static_cast<int32_t>(static_cast<uint64_t>(_memSize) & 0xFFFFFFFFu);
+        data[1] = static_cast<int32_t>(static_cast<uint64_t>(_memSize) >> 32);
+        break;
+      case REG_SYNC_ON_READ:
+        assert(sizeInBytes == 4);
+        *data = _syncOnRead ? 1 : 0;
+        break;
+      case REG_SYNC_ON_WRITE:
+        assert(sizeInBytes == 4);
+        *data = _syncOnWrite ? 1 : 0;
+        break;
+      default:
+        throw ChimeraTK::logic_error(
+            "udmabuf: BAR 0xff read from unknown register offset " + std::to_string(address));
     }
   }
 
@@ -265,54 +260,48 @@ namespace ChimeraTK {
       throw ChimeraTK::logic_error("udmabuf: BAR 0xff write address out of range.");
     }
 
-    while(sizeInBytes > 0) {
-      switch(address) {
-        case REG_SYNC_MODE:
-          writeSysfsUint64(_fdSyncMode, static_cast<uint32_t>(*data));
-          address += 4; data += 1; sizeInBytes -= 4;
-          break;
-        case REG_SYNC_DIR:
-          writeSysfsUint64(_fdSyncDir, static_cast<uint32_t>(*data));
-          address += 4; data += 1; sizeInBytes -= 4;
-          break;
-        case REG_SYNC_OFF: {
-          auto syncOffset = static_cast<uint64_t>(static_cast<uint32_t>(data[0])) |
-                            (static_cast<uint64_t>(static_cast<uint32_t>(data[1])) << 32);
-          writeSysfsUint64(_fdSyncOffset, syncOffset);
-          address += 8; data += 2; sizeInBytes -= 8;
-          break;
-        }
-        case REG_SYNC_SIZE: {
-          auto syncSize = static_cast<uint64_t>(static_cast<uint32_t>(data[0])) |
-                          (static_cast<uint64_t>(static_cast<uint32_t>(data[1])) << 32);
-          writeSysfsUint64(_fdSyncSize, syncSize);
-          address += 8; data += 2; sizeInBytes -= 8;
-          break;
-        }
-        case REG_SYNC_FOR_CPU:
-          writeSysfsUint64(_fdSyncForCpu, static_cast<uint32_t>(*data));
-          address += 4; data += 1; sizeInBytes -= 4;
-          break;
-        case REG_SYNC_FOR_DEV:
-          writeSysfsUint64(_fdSyncForDevice, static_cast<uint32_t>(*data));
-          address += 4; data += 1; sizeInBytes -= 4;
-          break;
-        case REG_SYNC_ON_READ:
-          _syncOnRead = (*data != 0);
-          address += 4; data += 1; sizeInBytes -= 4;
-          break;
-        case REG_SYNC_ON_WRITE:
-          _syncOnWrite = (*data != 0);
-          address += 4; data += 1; sizeInBytes -= 4;
-          break;
-        case REG_PHYS_ADDR:
-        case REG_BUF_SIZE:
-          throw ChimeraTK::logic_error(
-              "udmabuf: BAR 0xff register at offset " + std::to_string(address) + " is read-only.");
-        default:
-          throw ChimeraTK::logic_error(
-              "udmabuf: BAR 0xff write to unknown register offset " + std::to_string(address));
-      }
+    switch(address) {
+      case REG_SYNC_MODE:
+        assert(sizeInBytes == 4);
+        writeSysfsUint64(_fdSyncMode, static_cast<uint32_t>(*data));
+        break;
+      case REG_SYNC_DIR:
+        assert(sizeInBytes == 4);
+        writeSysfsUint64(_fdSyncDir, static_cast<uint32_t>(*data));
+        break;
+      case REG_SYNC_OFF:
+        assert(sizeInBytes == 8);
+        writeSysfsUint64(_fdSyncOffset, static_cast<uint64_t>(static_cast<uint32_t>(data[0])) |
+                                            (static_cast<uint64_t>(static_cast<uint32_t>(data[1])) << 32));
+        break;
+      case REG_SYNC_SIZE:
+        assert(sizeInBytes == 8);
+        writeSysfsUint64(_fdSyncSize, static_cast<uint64_t>(static_cast<uint32_t>(data[0])) |
+                                          (static_cast<uint64_t>(static_cast<uint32_t>(data[1])) << 32));
+        break;
+      case REG_SYNC_FOR_CPU:
+        assert(sizeInBytes == 4);
+        writeSysfsUint64(_fdSyncForCpu, static_cast<uint32_t>(*data));
+        break;
+      case REG_SYNC_FOR_DEV:
+        assert(sizeInBytes == 4);
+        writeSysfsUint64(_fdSyncForDevice, static_cast<uint32_t>(*data));
+        break;
+      case REG_SYNC_ON_READ:
+        assert(sizeInBytes == 4);
+        _syncOnRead = (*data != 0);
+        break;
+      case REG_SYNC_ON_WRITE:
+        assert(sizeInBytes == 4);
+        _syncOnWrite = (*data != 0);
+        break;
+      case REG_PHYS_ADDR:
+      case REG_BUF_SIZE:
+        throw ChimeraTK::logic_error(
+            "udmabuf: BAR 0xff register at offset " + std::to_string(address) + " is read-only.");
+      default:
+        throw ChimeraTK::logic_error(
+            "udmabuf: BAR 0xff write to unknown register offset " + std::to_string(address));
     }
   }
 
