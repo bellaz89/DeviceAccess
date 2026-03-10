@@ -28,14 +28,21 @@ namespace ChimeraTK {
    * | u-dma-buf/sync_dir     | 0x04   | 1        | RW     |
    * | u-dma-buf/sync_offset  | 0x08   | 2        | RW     |
    * | u-dma-buf/sync_size    | 0x10   | 2        | RW     |
-   * | u-dma-buf/sync_for_cpu | 0x18   | 1        | WO     |
-   * | u-dma-buf/sync_for_dev | 0x1C   | 1        | WO     |
-   * | u-dma-buf/phys_addr    | 0x20   | 2        | RO     |
-   * | u-dma-buf/size         | 0x28   | 2        | RO     |
+   * | u-dma-buf/sync_for_cpu  | 0x18   | 1        | WO     |
+   * | u-dma-buf/sync_for_dev  | 0x1C   | 1        | WO     |
+   * | u-dma-buf/phys_addr     | 0x20   | 2        | RO     |
+   * | u-dma-buf/size          | 0x28   | 2        | RO     |
+   * | u-dma-buf/sync_on_read  | 0x30   | 1        | RW     |
+   * | u-dma-buf/sync_on_write | 0x34   | 1        | RW     |
    *
    * 64-bit attributes (sync_offset, sync_size, phys_addr, size) are exposed as
    * 2-element 32-bit arrays (lo word first). On write, the lo word is cached and
    * the sysfs attribute is written atomically when the hi word is received.
+   *
+   * When sync_on_read is non-zero, every BAR 0 read is preceded by a sync_for_cpu
+   * trigger (cache invalidation) so the CPU sees data written by the device.
+   * When sync_on_write is non-zero, every BAR 0 write is followed by a
+   * sync_for_device trigger (cache flush) so the device sees data written by the CPU.
    *
    * CDD format: (u-dma-buf:udmabuf0?map=mymap.map)
    *   - address : u-dma-buf device name without /dev/ prefix (e.g. udmabuf0),
@@ -50,6 +57,11 @@ namespace ChimeraTK {
     uint32_t _syncOffsetLo{0};
     /// Cached lo-word of sync_size; committed to sysfs when hi-word is written
     uint32_t _syncSizeLo{0};
+
+    /// When true, every BAR 0 read is preceded by a sync_for_cpu trigger (cache invalidation)
+    bool _syncOnRead{false};
+    /// When true, every BAR 0 write is followed by a sync_for_device trigger (cache flush)
+    bool _syncOnWrite{false};
 
     /// Persistent file descriptors for sysfs RW/WO attributes, open for the lifetime of the device connection
     int _fdSyncMode{-1};
