@@ -22,20 +22,16 @@ namespace ChimeraTK {
   static constexpr size_t BAR1_SIZE = 0x38;
 
   // BAR 0xff register offsets
-  static constexpr uint64_t REG_SYNC_MODE     = 0x00;
-  static constexpr uint64_t REG_SYNC_DIR      = 0x04;
-  static constexpr uint64_t REG_SYNC_OFF_LO   = 0x08;
-  static constexpr uint64_t REG_SYNC_OFF_HI   = 0x0C;
-  static constexpr uint64_t REG_SYNC_SIZE_LO  = 0x10;
-  static constexpr uint64_t REG_SYNC_SIZE_HI  = 0x14;
-  static constexpr uint64_t REG_SYNC_FOR_CPU  = 0x18;
-  static constexpr uint64_t REG_SYNC_FOR_DEV  = 0x1C;
-  static constexpr uint64_t REG_PHYS_ADDR_LO  = 0x20;
-  static constexpr uint64_t REG_PHYS_ADDR_HI  = 0x24;
-  static constexpr uint64_t REG_BUF_SIZE_LO   = 0x28;
-  static constexpr uint64_t REG_BUF_SIZE_HI   = 0x2C;
-  static constexpr uint64_t REG_SYNC_ON_READ  = 0x30;
-  static constexpr uint64_t REG_SYNC_ON_WRITE = 0x34;
+  static constexpr uint64_t REG_SYNC_MODE     = 0x00; // 32-bit
+  static constexpr uint64_t REG_SYNC_DIR      = 0x04; // 32-bit
+  static constexpr uint64_t REG_SYNC_OFF      = 0x08; // 64-bit
+  static constexpr uint64_t REG_SYNC_SIZE     = 0x10; // 64-bit
+  static constexpr uint64_t REG_SYNC_FOR_CPU  = 0x18; // 32-bit
+  static constexpr uint64_t REG_SYNC_FOR_DEV  = 0x1C; // 32-bit
+  static constexpr uint64_t REG_PHYS_ADDR     = 0x20; // 64-bit
+  static constexpr uint64_t REG_BUF_SIZE      = 0x28; // 64-bit
+  static constexpr uint64_t REG_SYNC_ON_READ  = 0x30; // 32-bit
+  static constexpr uint64_t REG_SYNC_ON_WRITE = 0x34; // 32-bit
 
   /********************************************************************************************************************/
 
@@ -45,21 +41,22 @@ namespace ChimeraTK {
   , _sysfsBase("/sys/class/u-dma-buf/" + _devName + "/") {
     using Access = NumericAddressedRegisterInfo::Access;
 
-    auto addReg = [this](const std::string& name, uint64_t address, uint32_t nElements, Access access) {
+    auto addReg = [this](const std::string& name, uint64_t address, uint32_t width, Access access) {
+      uint32_t nBytes = width / 8;
       _registerMap.addRegister(NumericAddressedRegisterInfo(
-          RegisterPath("/u-dma-buf") / name, nElements, address, nElements * 4, 0xff, 32, 0, false, access));
+          RegisterPath("/u-dma-buf") / name, 1, address, nBytes, 0xff, width, 0, false, access));
     };
 
-    addReg("sync_mode",       REG_SYNC_MODE,    1, Access::READ_WRITE);
-    addReg("sync_direction",  REG_SYNC_DIR,     1, Access::READ_WRITE);
-    addReg("sync_offset",     REG_SYNC_OFF_LO,  2, Access::READ_WRITE);
-    addReg("sync_size",       REG_SYNC_SIZE_LO, 2, Access::READ_WRITE);
-    addReg("sync_for_cpu",    REG_SYNC_FOR_CPU,  1, Access::WRITE_ONLY);
-    addReg("sync_for_device", REG_SYNC_FOR_DEV,  1, Access::WRITE_ONLY);
-    addReg("phys_addr",       REG_PHYS_ADDR_LO,  2, Access::READ_ONLY);
-    addReg("size",            REG_BUF_SIZE_LO,   2, Access::READ_ONLY);
-    addReg("sync_on_read",    REG_SYNC_ON_READ,  1, Access::READ_WRITE);
-    addReg("sync_on_write",   REG_SYNC_ON_WRITE, 1, Access::READ_WRITE);
+    addReg("sync_mode",       REG_SYNC_MODE,     32, Access::READ_WRITE);
+    addReg("sync_direction",  REG_SYNC_DIR,      32, Access::READ_WRITE);
+    addReg("sync_offset",     REG_SYNC_OFF,      64, Access::READ_WRITE);
+    addReg("sync_size",       REG_SYNC_SIZE,     64, Access::READ_WRITE);
+    addReg("sync_for_cpu",    REG_SYNC_FOR_CPU,  32, Access::WRITE_ONLY);
+    addReg("sync_for_device", REG_SYNC_FOR_DEV,  32, Access::WRITE_ONLY);
+    addReg("phys_addr",       REG_PHYS_ADDR,     64, Access::READ_ONLY);
+    addReg("size",            REG_BUF_SIZE,      64, Access::READ_ONLY);
+    addReg("sync_on_read",    REG_SYNC_ON_READ,  32, Access::READ_WRITE);
+    addReg("sync_on_write",   REG_SYNC_ON_WRITE, 32, Access::READ_WRITE);
   }
 
   /********************************************************************************************************************/
@@ -196,59 +193,56 @@ namespace ChimeraTK {
       switch(address) {
         case REG_SYNC_MODE:
           *data = static_cast<int32_t>(readSysfsUint64(_fdSyncMode));
+          address += 4; data += 1; sizeInBytes -= 4;
           break;
         case REG_SYNC_DIR:
           *data = static_cast<int32_t>(readSysfsUint64(_fdSyncDir));
+          address += 4; data += 1; sizeInBytes -= 4;
           break;
-        case REG_SYNC_OFF_LO: {
+        case REG_SYNC_OFF: {
           auto syncOffset = readSysfsUint64(_fdSyncOffset);
-          *data = static_cast<int32_t>(syncOffset & 0xFFFFFFFFu);
+          data[0] = static_cast<int32_t>(syncOffset & 0xFFFFFFFFu);
+          data[1] = static_cast<int32_t>(syncOffset >> 32);
+          address += 8; data += 2; sizeInBytes -= 8;
           break;
         }
-        case REG_SYNC_OFF_HI: {
-          auto syncOffset = readSysfsUint64(_fdSyncOffset);
-          *data = static_cast<int32_t>((syncOffset >> 32) & 0xFFFFFFFFu);
-          break;
-        }
-        case REG_SYNC_SIZE_LO: {
+        case REG_SYNC_SIZE: {
           auto syncSize = readSysfsUint64(_fdSyncSize);
-          *data = static_cast<int32_t>(syncSize & 0xFFFFFFFFu);
-          break;
-        }
-        case REG_SYNC_SIZE_HI: {
-          auto syncSize = readSysfsUint64(_fdSyncSize);
-          *data = static_cast<int32_t>((syncSize >> 32) & 0xFFFFFFFFu);
+          data[0] = static_cast<int32_t>(syncSize & 0xFFFFFFFFu);
+          data[1] = static_cast<int32_t>(syncSize >> 32);
+          address += 8; data += 2; sizeInBytes -= 8;
           break;
         }
         case REG_SYNC_FOR_CPU:
         case REG_SYNC_FOR_DEV:
           *data = 0; // write-only registers: return 0
+          address += 4; data += 1; sizeInBytes -= 4;
           break;
-        case REG_PHYS_ADDR_LO:
-          *data = static_cast<int32_t>(_baseAddress & 0xFFFFFFFFu);
+        case REG_PHYS_ADDR: {
+          data[0] = static_cast<int32_t>(_baseAddress & 0xFFFFFFFFu);
+          data[1] = static_cast<int32_t>(_baseAddress >> 32);
+          address += 8; data += 2; sizeInBytes -= 8;
           break;
-        case REG_PHYS_ADDR_HI:
-          *data = static_cast<int32_t>(_baseAddress >> 32);
+        }
+        case REG_BUF_SIZE: {
+          auto bufSize = static_cast<uint64_t>(_memSize);
+          data[0] = static_cast<int32_t>(bufSize & 0xFFFFFFFFu);
+          data[1] = static_cast<int32_t>(bufSize >> 32);
+          address += 8; data += 2; sizeInBytes -= 8;
           break;
-        case REG_BUF_SIZE_LO:
-          *data = static_cast<int32_t>(static_cast<uint64_t>(_memSize) & 0xFFFFFFFFu);
-          break;
-        case REG_BUF_SIZE_HI:
-          *data = static_cast<int32_t>(static_cast<uint64_t>(_memSize) >> 32);
-          break;
+        }
         case REG_SYNC_ON_READ:
           *data = _syncOnRead ? 1 : 0;
+          address += 4; data += 1; sizeInBytes -= 4;
           break;
         case REG_SYNC_ON_WRITE:
           *data = _syncOnWrite ? 1 : 0;
+          address += 4; data += 1; sizeInBytes -= 4;
           break;
         default:
           throw ChimeraTK::logic_error(
               "udmabuf: BAR 0xff read from unknown register offset " + std::to_string(address));
       }
-      address += 4;
-      ++data;
-      sizeInBytes -= 4;
     }
   }
 
@@ -272,51 +266,53 @@ namespace ChimeraTK {
     }
 
     while(sizeInBytes > 0) {
-      auto u32 = static_cast<uint32_t>(*data);
       switch(address) {
         case REG_SYNC_MODE:
-          writeSysfsUint64(_fdSyncMode, u32);
+          writeSysfsUint64(_fdSyncMode, static_cast<uint32_t>(*data));
+          address += 4; data += 1; sizeInBytes -= 4;
           break;
         case REG_SYNC_DIR:
-          writeSysfsUint64(_fdSyncDir, u32);
+          writeSysfsUint64(_fdSyncDir, static_cast<uint32_t>(*data));
+          address += 4; data += 1; sizeInBytes -= 4;
           break;
-        case REG_SYNC_OFF_LO:
-          _syncOffsetLo = u32;
+        case REG_SYNC_OFF: {
+          auto syncOffset = static_cast<uint64_t>(static_cast<uint32_t>(data[0])) |
+                            (static_cast<uint64_t>(static_cast<uint32_t>(data[1])) << 32);
+          writeSysfsUint64(_fdSyncOffset, syncOffset);
+          address += 8; data += 2; sizeInBytes -= 8;
           break;
-        case REG_SYNC_OFF_HI:
-          writeSysfsUint64(_fdSyncOffset, (static_cast<uint64_t>(u32) << 32) | _syncOffsetLo);
+        }
+        case REG_SYNC_SIZE: {
+          auto syncSize = static_cast<uint64_t>(static_cast<uint32_t>(data[0])) |
+                          (static_cast<uint64_t>(static_cast<uint32_t>(data[1])) << 32);
+          writeSysfsUint64(_fdSyncSize, syncSize);
+          address += 8; data += 2; sizeInBytes -= 8;
           break;
-        case REG_SYNC_SIZE_LO:
-          _syncSizeLo = u32;
-          break;
-        case REG_SYNC_SIZE_HI:
-          writeSysfsUint64(_fdSyncSize, (static_cast<uint64_t>(u32) << 32) | _syncSizeLo);
-          break;
+        }
         case REG_SYNC_FOR_CPU:
-          writeSysfsUint64(_fdSyncForCpu, u32);
+          writeSysfsUint64(_fdSyncForCpu, static_cast<uint32_t>(*data));
+          address += 4; data += 1; sizeInBytes -= 4;
           break;
         case REG_SYNC_FOR_DEV:
-          writeSysfsUint64(_fdSyncForDevice, u32);
+          writeSysfsUint64(_fdSyncForDevice, static_cast<uint32_t>(*data));
+          address += 4; data += 1; sizeInBytes -= 4;
           break;
         case REG_SYNC_ON_READ:
-          _syncOnRead = (u32 != 0);
+          _syncOnRead = (*data != 0);
+          address += 4; data += 1; sizeInBytes -= 4;
           break;
         case REG_SYNC_ON_WRITE:
-          _syncOnWrite = (u32 != 0);
+          _syncOnWrite = (*data != 0);
+          address += 4; data += 1; sizeInBytes -= 4;
           break;
-        case REG_PHYS_ADDR_LO:
-        case REG_PHYS_ADDR_HI:
-        case REG_BUF_SIZE_LO:
-        case REG_BUF_SIZE_HI:
+        case REG_PHYS_ADDR:
+        case REG_BUF_SIZE:
           throw ChimeraTK::logic_error(
               "udmabuf: BAR 0xff register at offset " + std::to_string(address) + " is read-only.");
         default:
           throw ChimeraTK::logic_error(
               "udmabuf: BAR 0xff write to unknown register offset " + std::to_string(address));
       }
-      address += 4;
-      ++data;
-      sizeInBytes -= 4;
     }
   }
 
