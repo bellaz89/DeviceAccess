@@ -20,8 +20,11 @@
 
 namespace ChimeraTK {
 
-  // BAR 0xff total size
-  static constexpr size_t BAR_FF_SIZE = 0x38;
+  // BAR index for the virtual sysfs control register bank
+  static constexpr uint64_t BAR_SYSFS = 0xff;
+
+  // BAR_SYSFS total size
+  static constexpr size_t BAR_SYSFS_SIZE = 0x38;
 
   // BAR 0xff register offsets
   static constexpr uint64_t REG_SYNC_MODE     = 0x00; // 32-bit
@@ -44,7 +47,7 @@ namespace ChimeraTK {
     auto addReg = [this](const std::string& name, uint64_t address, uint32_t width, Access access) {
       uint32_t nBytes = width / 8;
       _registerMap.addRegister(NumericAddressedRegisterInfo(
-          RegisterPath("/u-dma-buf") / name, 1, address, nBytes, 0xff, width, 0, false, access));
+          RegisterPath("/u-dma-buf") / name, 1, address, nBytes, BAR_SYSFS, width, 0, false, access));
     };
 
     addReg("sync_mode",       REG_SYNC_MODE,     32, Access::READ_WRITE);
@@ -183,7 +186,7 @@ namespace ChimeraTK {
     assert(_opened);
     checkActiveException();
 
-    if(bar != 0xff) {
+    if(bar != BAR_SYSFS) {
       if(_syncOnRead) {
         writeSysfsUint64(_fdSyncForCpu, 1);
       }
@@ -192,7 +195,7 @@ namespace ChimeraTK {
     }
 
     // bar == 0xff: sysfs register bank
-    if(address + sizeInBytes > BAR_FF_SIZE) {
+    if(address + sizeInBytes > BAR_SYSFS_SIZE) {
       throw ChimeraTK::logic_error("udmabuf: BAR 0xff read address out of range.");
     }
 
@@ -254,7 +257,7 @@ namespace ChimeraTK {
     assert(_opened);
     checkActiveException();
 
-    if(bar != 0xff) {
+    if(bar != BAR_SYSFS) {
       DirectMappingBackend::write(bar, address, data, sizeInBytes);
       if(_syncOnWrite) {
         writeSysfsUint64(_fdSyncForDevice, 1);
@@ -263,7 +266,7 @@ namespace ChimeraTK {
     }
 
     // bar == 0xff: sysfs register bank
-    if(address + sizeInBytes > BAR_FF_SIZE) {
+    if(address + sizeInBytes > BAR_SYSFS_SIZE) {
       throw ChimeraTK::logic_error("udmabuf: BAR 0xff write address out of range.");
     }
 
