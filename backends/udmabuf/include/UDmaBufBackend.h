@@ -24,20 +24,22 @@ namespace ChimeraTK {
    *
    * | Register               | Offset | Elements | Access |
    * |------------------------|--------|----------|--------|
-   * | u-dma-buf/sync_mode    | 0x00   | 1        | RW     |
-   * | u-dma-buf/sync_dir     | 0x04   | 1        | RW     |
-   * | u-dma-buf/sync_offset  | 0x08   | 2        | RW     |
-   * | u-dma-buf/sync_size    | 0x10   | 2        | RW     |
-   * | u-dma-buf/sync_for_cpu  | 0x18   | 1        | WO     |
-   * | u-dma-buf/sync_for_dev  | 0x1C   | 1        | WO     |
-   * | u-dma-buf/phys_addr     | 0x20   | 2        | RO     |
-   * | u-dma-buf/size          | 0x28   | 2        | RO     |
-   * | u-dma-buf/sync_on_read  | 0x30   | 1        | RW     |
-   * | u-dma-buf/sync_on_write | 0x34   | 1        | RW     |
+   * | Register                | Offset | Width | Access |
+   * |-------------------------|--------|-------|--------|
+   * | u-dma-buf/sync_mode     | 0x00   | 32    | RW     |
+   * | u-dma-buf/sync_dir      | 0x04   | 32    | RW     |
+   * | u-dma-buf/sync_offset   | 0x08   | 64    | RW     |
+   * | u-dma-buf/sync_size     | 0x10   | 64    | RW     |
+   * | u-dma-buf/sync_for_cpu  | 0x18   | 32    | WO     |
+   * | u-dma-buf/sync_for_dev  | 0x1C   | 32    | WO     |
+   * | u-dma-buf/phys_addr     | 0x20   | 64    | RO     |
+   * | u-dma-buf/size          | 0x28   | 64    | RO     |
+   * | u-dma-buf/sync_on_read  | 0x30   | 32    | RW     |
+   * | u-dma-buf/sync_on_write | 0x34   | 32    | RW     |
    *
-   * 64-bit attributes (sync_offset, sync_size, phys_addr, size) are exposed as
-   * 2-element 32-bit arrays (lo word first). On write, the lo word is cached and
-   * the sysfs attribute is written atomically when the hi word is received.
+   * 64-bit attributes (sync_offset, sync_size, phys_addr, size) are native
+   * int64_t scalars. The 32-bit buffer passed to read()/write() holds the
+   * lo word at data[0] and the hi word at data[1] (little-endian).
    *
    * When sync_on_read is non-zero, every BAR 0 read is preceded by a sync_for_cpu
    * trigger (cache invalidation) so the CPU sees data written by the device.
@@ -52,11 +54,6 @@ namespace ChimeraTK {
   class UDmaBufBackend : public DirectMappingBackend {
     std::string _devName;   ///< Device name as given in the CDD (e.g. "udmabuf0")
     std::string _sysfsBase; ///< Base sysfs path, e.g. "/sys/class/u-dma-buf/udmabuf0/"
-
-    /// Cached lo-word of sync_offset; committed to sysfs when hi-word is written
-    uint32_t _syncOffsetLo{0};
-    /// Cached lo-word of sync_size; committed to sysfs when hi-word is written
-    uint32_t _syncSizeLo{0};
 
     /// When true, every BAR 0 read is preceded by a sync_for_cpu trigger (cache invalidation)
     bool _syncOnRead{false};
