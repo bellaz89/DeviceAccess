@@ -52,8 +52,7 @@ namespace ChimeraTK {
    *   - map     : register map file (optional)
    */
   class UDmaBufBackend : public DirectMappingBackend {
-    std::string _devName;   ///< Device name as given in the CDD (e.g. "udmabuf0")
-    std::string _sysfsBase; ///< Base sysfs path, e.g. "/sys/class/u-dma-buf/udmabuf0/"
+    std::string _sysfsBase; ///< Base sysfs path, resolved from device number at open() time
 
     /// When true, every BAR 0 read is preceded by a sync_for_cpu trigger (cache invalidation)
     bool _syncOnRead{false};
