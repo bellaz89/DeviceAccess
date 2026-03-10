@@ -169,8 +169,8 @@ namespace ChimeraTK {
 
   /********************************************************************************************************************/
 
-  bool UDmaBufBackend::barIndexValid(uint64_t bar) {
-    return (bar == 0 || bar == 0xff);
+  bool UDmaBufBackend::barIndexValid([[maybe_unused]] uint64_t bar) {
+    return true;
   }
 
   /********************************************************************************************************************/
