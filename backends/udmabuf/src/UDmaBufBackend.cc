@@ -314,10 +314,10 @@ namespace ChimeraTK {
 
   std::string UDmaBufBackend::readDeviceInfo() {
     if(_opened) {
-      return "UDmaBuf backend: Device = " + _devicePath + ", sysfs = " + _sysfsBase +
+      return "udmabuf backend: Device = " + _devicePath + ", sysfs = " + _sysfsBase +
              ", size = " + std::to_string(_memSize) + " bytes";
     }
-    return "UDmaBuf backend: Device = " + _devicePath + " (closed)";
+    return "udmabuf backend: Device = " + _devicePath + " (closed)";
   }
 
 } // namespace ChimeraTK
