@@ -8,6 +8,8 @@
 #include <filesystem>
 
 #include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/sysmacros.h>
 #include <unistd.h>
 
 #include <cassert>
@@ -36,9 +38,7 @@ namespace ChimeraTK {
   /********************************************************************************************************************/
 
   UDmaBufBackend::UDmaBufBackend(std::string devName, std::string mapFileName)
-  : DirectMappingBackend("/dev/" + devName, std::move(mapFileName), 0)
-  , _devName(std::move(devName))
-  , _sysfsBase("/sys/class/u-dma-buf/" + _devName + "/") {
+  : DirectMappingBackend("/dev/" + devName, std::move(mapFileName), 0) {
     using Access = NumericAddressedRegisterInfo::Access;
 
     auto addReg = [this](const std::string& name, uint64_t address, uint32_t width, Access access) {
@@ -72,13 +72,18 @@ namespace ChimeraTK {
   /********************************************************************************************************************/
 
   void UDmaBufBackend::open() {
-    // Resolve udev symlink to real device name
-    std::filesystem::path devPath(_devicePath);
-    if(std::filesystem::is_symlink(devPath)) {
-      devPath = std::filesystem::canonical(devPath);
-      _devicePath = devPath.string();
-      _sysfsBase = "/sys/class/u-dma-buf/" + devPath.filename().string() + "/";
+    // Determine the sysfs path from the device number. stat() follows symlinks automatically,
+    // so this works regardless of whether _devicePath is a real node or a udev symlink,
+    // and regardless of what name the device was given in /sys/class/.
+    struct stat st{};
+    if(::stat(_devicePath.c_str(), &st) < 0) {
+      throw ChimeraTK::runtime_error(
+          "udmabuf: Cannot stat '" + _devicePath + "': " + std::strerror(errno));
     }
+    auto charLink = "/sys/dev/char/" + std::to_string(major(st.st_rdev)) + ":" +
+                    std::to_string(minor(st.st_rdev));
+    _sysfsBase = std::filesystem::canonical(charLink).string() + "/";
+
     // Inject size and base address from sysfs so DirectMappingBackend::open() picks them up
     _sizeParam = static_cast<size_t>(readSysfsUint64("size"));
     _baseAddrParam = readSysfsUint64("phys_addr");
@@ -308,14 +313,11 @@ namespace ChimeraTK {
   /********************************************************************************************************************/
 
   std::string UDmaBufBackend::readDeviceInfo() {
-    std::string result = "UDmaBuf backend: Device = " + _devicePath + ", sysfs = " + _sysfsBase;
     if(_opened) {
-      result += ", size = " + std::to_string(_memSize) + " bytes";
+      return "UDmaBuf backend: Device = " + _devicePath + ", sysfs = " + _sysfsBase +
+             ", size = " + std::to_string(_memSize) + " bytes";
     }
-    else {
-      result += " (device closed)";
-    }
-    return result;
+    return "UDmaBuf backend: Device = " + _devicePath + " (closed)";
   }
 
 } // namespace ChimeraTK
