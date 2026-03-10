@@ -19,21 +19,23 @@
 namespace ChimeraTK {
 
   // BAR 0xff total size
-  static constexpr size_t BAR1_SIZE = 0x30;
+  static constexpr size_t BAR1_SIZE = 0x38;
 
   // BAR 0xff register offsets
-  static constexpr uint64_t REG_SYNC_MODE = 0x00;
-  static constexpr uint64_t REG_SYNC_DIR = 0x04;
-  static constexpr uint64_t REG_SYNC_OFF_LO = 0x08;
-  static constexpr uint64_t REG_SYNC_OFF_HI = 0x0C;
-  static constexpr uint64_t REG_SYNC_SIZE_LO = 0x10;
-  static constexpr uint64_t REG_SYNC_SIZE_HI = 0x14;
-  static constexpr uint64_t REG_SYNC_FOR_CPU = 0x18;
-  static constexpr uint64_t REG_SYNC_FOR_DEV = 0x1C;
-  static constexpr uint64_t REG_PHYS_ADDR_LO = 0x20;
-  static constexpr uint64_t REG_PHYS_ADDR_HI = 0x24;
-  static constexpr uint64_t REG_BUF_SIZE_LO = 0x28;
-  static constexpr uint64_t REG_BUF_SIZE_HI = 0x2C;
+  static constexpr uint64_t REG_SYNC_MODE     = 0x00;
+  static constexpr uint64_t REG_SYNC_DIR      = 0x04;
+  static constexpr uint64_t REG_SYNC_OFF_LO   = 0x08;
+  static constexpr uint64_t REG_SYNC_OFF_HI   = 0x0C;
+  static constexpr uint64_t REG_SYNC_SIZE_LO  = 0x10;
+  static constexpr uint64_t REG_SYNC_SIZE_HI  = 0x14;
+  static constexpr uint64_t REG_SYNC_FOR_CPU  = 0x18;
+  static constexpr uint64_t REG_SYNC_FOR_DEV  = 0x1C;
+  static constexpr uint64_t REG_PHYS_ADDR_LO  = 0x20;
+  static constexpr uint64_t REG_PHYS_ADDR_HI  = 0x24;
+  static constexpr uint64_t REG_BUF_SIZE_LO   = 0x28;
+  static constexpr uint64_t REG_BUF_SIZE_HI   = 0x2C;
+  static constexpr uint64_t REG_SYNC_ON_READ  = 0x30;
+  static constexpr uint64_t REG_SYNC_ON_WRITE = 0x34;
 
   /********************************************************************************************************************/
 
@@ -52,10 +54,12 @@ namespace ChimeraTK {
     addReg("sync_direction",  REG_SYNC_DIR,     1, Access::READ_WRITE);
     addReg("sync_offset",     REG_SYNC_OFF_LO,  2, Access::READ_WRITE);
     addReg("sync_size",       REG_SYNC_SIZE_LO, 2, Access::READ_WRITE);
-    addReg("sync_for_cpu",    REG_SYNC_FOR_CPU, 1, Access::WRITE_ONLY);
-    addReg("sync_for_device", REG_SYNC_FOR_DEV, 1, Access::WRITE_ONLY);
-    addReg("phys_addr",       REG_PHYS_ADDR_LO, 2, Access::READ_ONLY);
-    addReg("size",            REG_BUF_SIZE_LO,  2, Access::READ_ONLY);
+    addReg("sync_for_cpu",    REG_SYNC_FOR_CPU,  1, Access::WRITE_ONLY);
+    addReg("sync_for_device", REG_SYNC_FOR_DEV,  1, Access::WRITE_ONLY);
+    addReg("phys_addr",       REG_PHYS_ADDR_LO,  2, Access::READ_ONLY);
+    addReg("size",            REG_BUF_SIZE_LO,   2, Access::READ_ONLY);
+    addReg("sync_on_read",    REG_SYNC_ON_READ,  1, Access::READ_WRITE);
+    addReg("sync_on_write",   REG_SYNC_ON_WRITE, 1, Access::READ_WRITE);
   }
 
   /********************************************************************************************************************/
@@ -176,7 +180,9 @@ namespace ChimeraTK {
     checkActiveException();
 
     if(bar != 0xff) {
-      // Delegate to base class for mmap'd buffer
+      if(_syncOnRead) {
+        writeSysfsUint64(_fdSyncForCpu, 1);
+      }
       DirectMappingBackend::read(bar, address, data, sizeInBytes);
       return;
     }
@@ -230,6 +236,12 @@ namespace ChimeraTK {
         case REG_BUF_SIZE_HI:
           *data = static_cast<int32_t>(static_cast<uint64_t>(_memSize) >> 32);
           break;
+        case REG_SYNC_ON_READ:
+          *data = _syncOnRead ? 1 : 0;
+          break;
+        case REG_SYNC_ON_WRITE:
+          *data = _syncOnWrite ? 1 : 0;
+          break;
         default:
           throw ChimeraTK::logic_error(
               "udmabuf: BAR 0xff read from unknown register offset " + std::to_string(address));
@@ -247,8 +259,10 @@ namespace ChimeraTK {
     checkActiveException();
 
     if(bar != 0xff) {
-      // Delegate to base class for mmap'd buffer
       DirectMappingBackend::write(bar, address, data, sizeInBytes);
+      if(_syncOnWrite) {
+        writeSysfsUint64(_fdSyncForDevice, 1);
+      }
       return;
     }
 
@@ -283,6 +297,12 @@ namespace ChimeraTK {
           break;
         case REG_SYNC_FOR_DEV:
           writeSysfsUint64(_fdSyncForDevice, u32);
+          break;
+        case REG_SYNC_ON_READ:
+          _syncOnRead = (u32 != 0);
+          break;
+        case REG_SYNC_ON_WRITE:
+          _syncOnWrite = (u32 != 0);
           break;
         case REG_PHYS_ADDR_LO:
         case REG_PHYS_ADDR_HI:
