@@ -21,7 +21,7 @@
 namespace ChimeraTK {
 
   // BAR 0xff total size
-  static constexpr size_t BAR1_SIZE = 0x38;
+  static constexpr size_t BAR_FF_SIZE = 0x38;
 
   // BAR 0xff register offsets
   static constexpr uint64_t REG_SYNC_MODE     = 0x00; // 32-bit
@@ -84,9 +84,11 @@ namespace ChimeraTK {
                     std::to_string(minor(st.st_rdev));
     _sysfsBase = std::filesystem::canonical(charLink).string() + "/";
 
-    // Inject size and base address from sysfs so DirectMappingBackend::open() picks them up
+    // Inject buffer size from sysfs so DirectMappingBackend::open() picks it up.
+    // The physical base address is stored separately; map file offsets are relative to it,
+    // so _baseAddrParam stays 0 and DirectMappingBackend performs no address subtraction.
     _sizeParam = static_cast<size_t>(readSysfsUint64("size"));
-    _baseAddrParam = readSysfsUint64("phys_addr");
+    _physAddr  = readSysfsUint64("phys_addr");
 
     // Open persistent file descriptors for RW/WO sysfs attributes
     auto openFd = [&](const std::string& attr, int flags) {
@@ -190,7 +192,7 @@ namespace ChimeraTK {
     }
 
     // bar == 0xff: sysfs register bank
-    if(address + sizeInBytes > BAR1_SIZE) {
+    if(address + sizeInBytes > BAR_FF_SIZE) {
       throw ChimeraTK::logic_error("udmabuf: BAR 0xff read address out of range.");
     }
 
@@ -224,8 +226,8 @@ namespace ChimeraTK {
         break;
       case REG_PHYS_ADDR:
         assert(sizeInBytes == 8);
-        data[0] = static_cast<int32_t>(_baseAddress & 0xFFFFFFFFu);
-        data[1] = static_cast<int32_t>(_baseAddress >> 32);
+        data[0] = static_cast<int32_t>(_physAddr & 0xFFFFFFFFu);
+        data[1] = static_cast<int32_t>(_physAddr >> 32);
         break;
       case REG_BUF_SIZE:
         assert(sizeInBytes == 8);
@@ -261,7 +263,7 @@ namespace ChimeraTK {
     }
 
     // bar == 0xff: sysfs register bank
-    if(address + sizeInBytes > BAR1_SIZE) {
+    if(address + sizeInBytes > BAR_FF_SIZE) {
       throw ChimeraTK::logic_error("udmabuf: BAR 0xff write address out of range.");
     }
 

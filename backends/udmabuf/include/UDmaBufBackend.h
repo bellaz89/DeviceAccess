@@ -14,9 +14,10 @@ namespace ChimeraTK {
   /**
    * Backend for Linux u-dma-buf devices (Linux only).
    *
-   * Derives from DirectMappingBackend. Buffer size and base physical address are
-   * auto-discovered from the u-dma-buf sysfs interface at open() time. udev-created
-   * symlinks in /dev/ are resolved transparently.
+   * Derives from DirectMappingBackend. Buffer size is auto-discovered from the
+   * u-dma-buf sysfs interface at open() time. udev-created symlinks in /dev/ are
+   * resolved transparently. Map file register addresses are treated as byte offsets
+   * relative to the start of the DMA buffer (i.e. relative to its physical base address).
    *
    * In addition to the mmap'd DMA buffer on BAR 0, a virtual register bank on
    * BAR 0xff maps u-dma-buf sysfs control attributes as ChimeraTK registers
@@ -53,6 +54,7 @@ namespace ChimeraTK {
    */
   class UDmaBufBackend : public DirectMappingBackend {
     std::string _sysfsBase; ///< Base sysfs path, resolved from device number at open() time
+    uint64_t _physAddr{0};  ///< Physical base address of the DMA buffer, read from sysfs at open() time
 
     /// When true, every BAR 0 read is preceded by a sync_for_cpu trigger (cache invalidation)
     bool _syncOnRead{false};
