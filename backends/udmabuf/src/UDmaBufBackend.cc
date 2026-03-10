@@ -187,7 +187,6 @@ namespace ChimeraTK {
     }
 
     while(sizeInBytes > 0) {
-      uint64_t value64 = 0;
       switch(address) {
         case REG_SYNC_MODE:
           *data = static_cast<int32_t>(readSysfsUint64(_fdSyncMode));
@@ -195,22 +194,26 @@ namespace ChimeraTK {
         case REG_SYNC_DIR:
           *data = static_cast<int32_t>(readSysfsUint64(_fdSyncDir));
           break;
-        case REG_SYNC_OFF_LO:
-          value64 = readSysfsUint64(_fdSyncOffset);
-          *data = static_cast<int32_t>(value64 & 0xFFFFFFFFu);
+        case REG_SYNC_OFF_LO: {
+          auto syncOffset = readSysfsUint64(_fdSyncOffset);
+          *data = static_cast<int32_t>(syncOffset & 0xFFFFFFFFu);
           break;
-        case REG_SYNC_OFF_HI:
-          value64 = readSysfsUint64(_fdSyncOffset);
-          *data = static_cast<int32_t>((value64 >> 32) & 0xFFFFFFFFu);
+        }
+        case REG_SYNC_OFF_HI: {
+          auto syncOffset = readSysfsUint64(_fdSyncOffset);
+          *data = static_cast<int32_t>((syncOffset >> 32) & 0xFFFFFFFFu);
           break;
-        case REG_SYNC_SIZE_LO:
-          value64 = readSysfsUint64(_fdSyncSize);
-          *data = static_cast<int32_t>(value64 & 0xFFFFFFFFu);
+        }
+        case REG_SYNC_SIZE_LO: {
+          auto syncSize = readSysfsUint64(_fdSyncSize);
+          *data = static_cast<int32_t>(syncSize & 0xFFFFFFFFu);
           break;
-        case REG_SYNC_SIZE_HI:
-          value64 = readSysfsUint64(_fdSyncSize);
-          *data = static_cast<int32_t>((value64 >> 32) & 0xFFFFFFFFu);
+        }
+        case REG_SYNC_SIZE_HI: {
+          auto syncSize = readSysfsUint64(_fdSyncSize);
+          *data = static_cast<int32_t>((syncSize >> 32) & 0xFFFFFFFFu);
           break;
+        }
         case REG_SYNC_FOR_CPU:
         case REG_SYNC_FOR_DEV:
           *data = 0; // write-only registers: return 0
