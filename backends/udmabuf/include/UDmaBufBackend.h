@@ -51,17 +51,31 @@ namespace ChimeraTK {
     /// Cached lo-word of sync_size; committed to sysfs when hi-word is written
     uint32_t _syncSizeLo{0};
 
+    /// Persistent file descriptors for sysfs RW/WO attributes, open for the lifetime of the device connection
+    int _fdSyncMode{-1};
+    int _fdSyncDir{-1};
+    int _fdSyncOffset{-1};
+    int _fdSyncSize{-1};
+    int _fdSyncForCpu{-1};
+    int _fdSyncForDevice{-1};
+
     /**
      * Read a decimal uint64 from the sysfs attribute file at _sysfsBase + attr.
-     * Throws ChimeraTK::runtime_error on failure.
+     * Used only during initialisation. Throws ChimeraTK::runtime_error on failure.
      */
     uint64_t readSysfsUint64(const std::string& attr) const;
 
     /**
-     * Write a decimal uint64 to the sysfs attribute file at _sysfsBase + attr.
+     * Read a decimal uint64 from an already-open sysfs file descriptor via pread.
      * Throws ChimeraTK::runtime_error on failure.
      */
-    void writeSysfsUint64(const std::string& attr, uint64_t value) const;
+    uint64_t readSysfsUint64(int fd) const;
+
+    /**
+     * Write a decimal uint64 to an already-open sysfs file descriptor via pwrite.
+     * Throws ChimeraTK::runtime_error on failure.
+     */
+    void writeSysfsUint64(int fd, uint64_t value) const;
 
    public:
     UDmaBufBackend(std::string devName, std::string mapFileName);
@@ -71,10 +85,14 @@ namespace ChimeraTK {
         std::string address, std::map<std::string, std::string> parameters);
 
     /**
-     * Resolves udev symlinks, then injects buffer size and base physical address
-     * from sysfs into DirectMappingBackend before delegating to its open().
+     * Resolves udev symlinks, injects buffer size and base physical address from
+     * sysfs into DirectMappingBackend, opens persistent sysfs file descriptors for
+     * RW/WO attributes, then delegates to DirectMappingBackend::open().
      */
     void open() override;
+
+    /** Closes persistent sysfs file descriptors then delegates to DirectMappingBackend::closeImpl(). */
+    void closeImpl() override;
 
     bool barIndexValid(uint64_t bar) override;
 

@@ -7,10 +7,14 @@
 
 #include <filesystem>
 
+#include <fcntl.h>
+#include <unistd.h>
+
 #include <cassert>
+#include <cerrno>
+#include <cstdio>
+#include <cstring>
 #include <fstream>
-#include <sstream>
-#include <string>
 
 namespace ChimeraTK {
 
@@ -59,7 +63,7 @@ namespace ChimeraTK {
   boost::shared_ptr<DeviceBackend> UDmaBufBackend::createInstance(
       std::string address, std::map<std::string, std::string> parameters) {
     if(address.empty()) {
-      throw ChimeraTK::logic_error("UDmaBuf: Device name not specified.");
+      throw ChimeraTK::logic_error("udmabuf: Device name not specified.");
     }
     return boost::shared_ptr<DeviceBackend>(new UDmaBufBackend(address, parameters["map"]));
   }
@@ -77,7 +81,49 @@ namespace ChimeraTK {
     // Inject size and base address from sysfs so DirectMappingBackend::open() picks them up
     _sizeParam = static_cast<size_t>(readSysfsUint64("size"));
     _baseAddrParam = readSysfsUint64("phys_addr");
-    DirectMappingBackend::open();
+
+    // Open persistent file descriptors for RW/WO sysfs attributes
+    auto openFd = [&](const std::string& attr, int flags) {
+      std::string path = _sysfsBase + attr;
+      int fd = ::open(path.c_str(), flags);
+      if(fd < 0) {
+        throw ChimeraTK::runtime_error(
+            "udmabuf: Cannot open sysfs attribute '" + path + "': " + std::strerror(errno));
+      }
+      return fd;
+    };
+    _fdSyncMode      = openFd("sync_mode",      O_RDWR);
+    _fdSyncDir       = openFd("sync_direction", O_RDWR);
+    _fdSyncOffset    = openFd("sync_offset",    O_RDWR);
+    _fdSyncSize      = openFd("sync_size",      O_RDWR);
+    _fdSyncForCpu    = openFd("sync_for_cpu",   O_WRONLY);
+    _fdSyncForDevice = openFd("sync_for_device",O_WRONLY);
+
+    try {
+      DirectMappingBackend::open();
+    }
+    catch(...) {
+      closeImpl();
+      throw;
+    }
+  }
+
+  /********************************************************************************************************************/
+
+  void UDmaBufBackend::closeImpl() {
+    auto closeFd = [](int& fd) {
+      if(fd >= 0) {
+        ::close(fd);
+        fd = -1;
+      }
+    };
+    closeFd(_fdSyncMode);
+    closeFd(_fdSyncDir);
+    closeFd(_fdSyncOffset);
+    closeFd(_fdSyncSize);
+    closeFd(_fdSyncForCpu);
+    closeFd(_fdSyncForDevice);
+    DirectMappingBackend::closeImpl();
   }
 
   /********************************************************************************************************************/
@@ -86,7 +132,7 @@ namespace ChimeraTK {
     std::string path = _sysfsBase + attr;
     std::ifstream f(path);
     if(!f.is_open()) {
-      throw ChimeraTK::runtime_error("UDmaBuf: Cannot open sysfs attribute '" + path + "'.");
+      throw ChimeraTK::runtime_error("udmabuf: Cannot open sysfs attribute '" + path + "'.");
     }
     uint64_t value = 0;
     f >> std::dec >> value;
@@ -95,15 +141,25 @@ namespace ChimeraTK {
 
   /********************************************************************************************************************/
 
-  void UDmaBufBackend::writeSysfsUint64(const std::string& attr, uint64_t value) const {
-    std::string path = _sysfsBase + attr;
-    std::ofstream f(path);
-    if(!f.is_open()) {
-      throw ChimeraTK::runtime_error("UDmaBuf: Cannot open sysfs attribute '" + path + "' for writing.");
+  uint64_t UDmaBufBackend::readSysfsUint64(int fd) const {
+    char buf[32];
+    ssize_t n = ::pread(fd, buf, sizeof(buf) - 1, 0);
+    if(n <= 0) {
+      throw ChimeraTK::runtime_error(
+          "udmabuf: pread from sysfs fd failed: " + std::string(std::strerror(errno)));
     }
-    f << std::dec << value << "\n";
-    if(!f) {
-      throw ChimeraTK::runtime_error("UDmaBuf: Write failed for sysfs attribute '" + path + "'.");
+    buf[n] = '\0';
+    return std::strtoull(buf, nullptr, 10);
+  }
+
+  /********************************************************************************************************************/
+
+  void UDmaBufBackend::writeSysfsUint64(int fd, uint64_t value) const {
+    char buf[32];
+    int n = std::snprintf(buf, sizeof(buf), "%llu\n", static_cast<unsigned long long>(value));
+    if(::pwrite(fd, buf, static_cast<size_t>(n), 0) != n) {
+      throw ChimeraTK::runtime_error(
+          "udmabuf: pwrite to sysfs fd failed: " + std::string(std::strerror(errno)));
     }
   }
 
@@ -127,32 +183,32 @@ namespace ChimeraTK {
 
     // bar == 0xff: sysfs register bank
     if(address + sizeInBytes > BAR1_SIZE) {
-      throw ChimeraTK::logic_error("UDmaBuf: BAR 0xff read address out of range.");
+      throw ChimeraTK::logic_error("udmabuf: BAR 0xff read address out of range.");
     }
 
     while(sizeInBytes > 0) {
       uint64_t value64 = 0;
       switch(address) {
         case REG_SYNC_MODE:
-          *data = static_cast<int32_t>(readSysfsUint64("sync_mode"));
+          *data = static_cast<int32_t>(readSysfsUint64(_fdSyncMode));
           break;
         case REG_SYNC_DIR:
-          *data = static_cast<int32_t>(readSysfsUint64("sync_direction"));
+          *data = static_cast<int32_t>(readSysfsUint64(_fdSyncDir));
           break;
         case REG_SYNC_OFF_LO:
-          value64 = readSysfsUint64("sync_offset");
+          value64 = readSysfsUint64(_fdSyncOffset);
           *data = static_cast<int32_t>(value64 & 0xFFFFFFFFu);
           break;
         case REG_SYNC_OFF_HI:
-          value64 = readSysfsUint64("sync_offset");
+          value64 = readSysfsUint64(_fdSyncOffset);
           *data = static_cast<int32_t>((value64 >> 32) & 0xFFFFFFFFu);
           break;
         case REG_SYNC_SIZE_LO:
-          value64 = readSysfsUint64("sync_size");
+          value64 = readSysfsUint64(_fdSyncSize);
           *data = static_cast<int32_t>(value64 & 0xFFFFFFFFu);
           break;
         case REG_SYNC_SIZE_HI:
-          value64 = readSysfsUint64("sync_size");
+          value64 = readSysfsUint64(_fdSyncSize);
           *data = static_cast<int32_t>((value64 >> 32) & 0xFFFFFFFFu);
           break;
         case REG_SYNC_FOR_CPU:
@@ -160,12 +216,10 @@ namespace ChimeraTK {
           *data = 0; // write-only registers: return 0
           break;
         case REG_PHYS_ADDR_LO:
-          value64 = readSysfsUint64("phys_addr");
-          *data = static_cast<int32_t>(value64 & 0xFFFFFFFFu);
+          *data = static_cast<int32_t>(_baseAddress & 0xFFFFFFFFu);
           break;
         case REG_PHYS_ADDR_HI:
-          value64 = readSysfsUint64("phys_addr");
-          *data = static_cast<int32_t>((value64 >> 32) & 0xFFFFFFFFu);
+          *data = static_cast<int32_t>(_baseAddress >> 32);
           break;
         case REG_BUF_SIZE_LO:
           *data = static_cast<int32_t>(static_cast<uint64_t>(_memSize) & 0xFFFFFFFFu);
@@ -175,7 +229,7 @@ namespace ChimeraTK {
           break;
         default:
           throw ChimeraTK::logic_error(
-              "UDmaBuf: BAR 0xff read from unknown register offset " + std::to_string(address));
+              "udmabuf: BAR 0xff read from unknown register offset " + std::to_string(address));
       }
       address += 4;
       ++data;
@@ -197,45 +251,45 @@ namespace ChimeraTK {
 
     // bar == 0xff: sysfs register bank
     if(address + sizeInBytes > BAR1_SIZE) {
-      throw ChimeraTK::logic_error("UDmaBuf: BAR 0xff write address out of range.");
+      throw ChimeraTK::logic_error("udmabuf: BAR 0xff write address out of range.");
     }
 
     while(sizeInBytes > 0) {
       auto u32 = static_cast<uint32_t>(*data);
       switch(address) {
         case REG_SYNC_MODE:
-          writeSysfsUint64("sync_mode", u32);
+          writeSysfsUint64(_fdSyncMode, u32);
           break;
         case REG_SYNC_DIR:
-          writeSysfsUint64("sync_direction", u32);
+          writeSysfsUint64(_fdSyncDir, u32);
           break;
         case REG_SYNC_OFF_LO:
           _syncOffsetLo = u32;
           break;
         case REG_SYNC_OFF_HI:
-          writeSysfsUint64("sync_offset", (static_cast<uint64_t>(u32) << 32) | _syncOffsetLo);
+          writeSysfsUint64(_fdSyncOffset, (static_cast<uint64_t>(u32) << 32) | _syncOffsetLo);
           break;
         case REG_SYNC_SIZE_LO:
           _syncSizeLo = u32;
           break;
         case REG_SYNC_SIZE_HI:
-          writeSysfsUint64("sync_size", (static_cast<uint64_t>(u32) << 32) | _syncSizeLo);
+          writeSysfsUint64(_fdSyncSize, (static_cast<uint64_t>(u32) << 32) | _syncSizeLo);
           break;
         case REG_SYNC_FOR_CPU:
-          writeSysfsUint64("sync_for_cpu", u32);
+          writeSysfsUint64(_fdSyncForCpu, u32);
           break;
         case REG_SYNC_FOR_DEV:
-          writeSysfsUint64("sync_for_device", u32);
+          writeSysfsUint64(_fdSyncForDevice, u32);
           break;
         case REG_PHYS_ADDR_LO:
         case REG_PHYS_ADDR_HI:
         case REG_BUF_SIZE_LO:
         case REG_BUF_SIZE_HI:
           throw ChimeraTK::logic_error(
-              "UDmaBuf: BAR 0xff register at offset " + std::to_string(address) + " is read-only.");
+              "udmabuf: BAR 0xff register at offset " + std::to_string(address) + " is read-only.");
         default:
           throw ChimeraTK::logic_error(
-              "UDmaBuf: BAR 0xff write to unknown register offset " + std::to_string(address));
+              "udmabuf: BAR 0xff write to unknown register offset " + std::to_string(address));
       }
       address += 4;
       ++data;
