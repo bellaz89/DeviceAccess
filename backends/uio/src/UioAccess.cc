@@ -14,15 +14,18 @@
 #include <unistd.h>
 
 #include <cerrno>
+#include <format>
+#include <fstream>
+#include <limits>
 #include <utility>
 
 namespace ChimeraTK {
 
-  UioAccess::UioMap::UioMap() : {}
+  UioAccess::UioMap::UioMap() {}
 
   UioAccess::UioMap::UioMap(int deviceFileDescriptor, size_t uioMapIdx, const std::string& uioMapPath)
   : _deviceLowerBound(readUint64HexFromFile(uioMapPath + "/addr")),
-    _deviceHigherBound(readUint64HexFromFile(uioMapPath + "/size") + _deviceHigherBound) {
+    _deviceHigherBound(_deviceLowerBound + readUint64HexFromFile(uioMapPath + "/size")) {
     size_t mapSize = _deviceHigherBound - _deviceLowerBound;
 
     void* mapped =
@@ -60,9 +63,8 @@ namespace ChimeraTK {
       this->_deviceHigherBound = std::exchange(other._deviceHigherBound, 0);
       this->_deviceUserBase = std::exchange(other._deviceUserBase, nullptr);
     }
+    return *this;
   }
-  : _deviceLowerBound(other._deviceLowerBound), _deviceHigherBound(other._deviceHigherBound),
-    _deviceUserBase(std::exchange(other._deviceUserBase, nullptr)) {}
 
   UioAccess::UioMap::operator bool() const noexcept {
     return _deviceUserBase != nullptr;
@@ -98,7 +100,7 @@ namespace ChimeraTK {
       std::string requestType = isWrite ? "Write" : "Read";
       throw ChimeraTK::logic_error(
           std::format("UIO: {} request (low = {}, high = {}) outside device memory region (low = {}, high = {})",
-              _deviceLowerBound, _deviceHigherBound, address, address + sizeInBytes));
+              requestType, address, address + sizeInBytes, _deviceLowerBound, _deviceHigherBound));
     }
 
     // This is a temporary work around, because register nodes of current map use absolute bus addresses.
@@ -115,8 +117,8 @@ namespace ChimeraTK {
     if(boost::filesystem::is_symlink(_deviceFilePath)) {
       _deviceFilePath = boost::filesystem::canonical(_deviceFilePath);
     }
-    _fileName = _deviceFilePath.filename().string();
-    _lastInterruptCount = readUint32FromFile("/sys/class/uio/" + _fileName + "/event");
+    _filename = _deviceFilePath.filename().string();
+    _lastInterruptCount = readUint32FromFile("/sys/class/uio/" + _filename + "/event");
 
     // Open UIO device file here, so that interrupt thread can run before calling open()
     _deviceFileDescriptor = ::open(_deviceFilePath.c_str(), O_RDWR);
@@ -124,11 +126,11 @@ namespace ChimeraTK {
       throw ChimeraTK::runtime_error("UIO: Failed to open device file '" + getDeviceFilePath() + "'");
     }
 
-    _mapsNumber = 0;
+    _maps_number = 0;
     while(true) {
-      std::string uioMapPath = "/sys/class/uio/" + _fileName + "/maps/map" + std::to_string(_mapsNumber);
+      std::string uioMapPath = "/sys/class/uio/" + _filename + "/maps/map" + std::to_string(_maps_number);
       if(!boost::filesystem::is_directory(uioMapPath)) break;
-      _mapsNumber++;
+      _maps_number++;
     }
 
     _opened = true;
@@ -136,14 +138,14 @@ namespace ChimeraTK {
 
   void UioAccess::close() {
     if(_opened) {
-      for(auto map& : _maps) map = std::nullopt;
+      for(auto& map : _maps) map = UioMap{};
       ::close(_deviceFileDescriptor);
       _opened = false;
     }
   }
 
   bool UioAccess::mapIndexValid(uint64_t map) {
-    return map < _mapsNumber;
+    return map < _maps_number;
   }
 
   void UioAccess::read(uint64_t map, uint64_t address, int32_t* __restrict__ data, size_t sizeInBytes) {
@@ -166,7 +168,7 @@ namespace ChimeraTK {
 
   UioAccess::UioMap& UioAccess::getMap(size_t map) {
     if(!_maps[map]) [[unlikely]] {
-      std::string uioMapPath = "/sys/class/uio/" + _fileName + "/maps/map" + std::to_string(map);
+      std::string uioMapPath = "/sys/class/uio/" + _filename + "/maps/map" + std::to_string(map);
       _maps[map] = UioAccess::UioMap(_deviceFileDescriptor, map, uioMapPath);
     }
 
