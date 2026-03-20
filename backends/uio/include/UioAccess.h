@@ -30,7 +30,7 @@ namespace ChimeraTK {
       UioMap(UioMap&& other) noexcept;
       UioMap& operator=(UioMap&&) noexcept;
 
-      explicit operator bool() const;
+      explicit operator bool() const noexcept;
 
       /// @brief Read data from the specified memory offset address. The address range starts at '0'.
       /// @param address Start address of memory to read from
