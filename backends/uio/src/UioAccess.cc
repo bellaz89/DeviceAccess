@@ -117,8 +117,8 @@ namespace ChimeraTK {
     if(boost::filesystem::is_symlink(_deviceFilePath)) {
       _deviceFilePath = boost::filesystem::canonical(_deviceFilePath);
     }
-    _filename = _deviceFilePath.filename().string();
-    _lastInterruptCount = readUint32FromFile("/sys/class/uio/" + _filename + "/event");
+    _fileName = _deviceFilePath.filename().string();
+    _lastInterruptCount = readUint32FromFile("/sys/class/uio/" + _fileName + "/event");
 
     // Open UIO device file here, so that interrupt thread can run before calling open()
     _deviceFileDescriptor = ::open(_deviceFilePath.c_str(), O_RDWR);
@@ -126,11 +126,23 @@ namespace ChimeraTK {
       throw ChimeraTK::runtime_error("UIO: Failed to open device file '" + getDeviceFilePath() + "'");
     }
 
-    _maps_number = 0;
+    _mapsNumber = 0;
     while(true) {
-      std::string uioMapPath = "/sys/class/uio/" + _filename + "/maps/map" + std::to_string(_maps_number);
+      std::string uioMapPath = "/sys/class/uio/" + _fileName + "/maps/map" + std::to_string(_mapsNumber);
       if(!boost::filesystem::is_directory(uioMapPath)) break;
-      _maps_number++;
+      _mapsNumber++;
+    }
+
+    try {
+      for(uint8_t i = 0; i < _mapsNumber; ++i) {
+        std::string uioMapPath = "/sys/class/uio/" + _fileName + "/maps/map" + std::to_string(i);
+        _maps[i] = UioAccess::UioMap(_deviceFileDescriptor, i, uioMapPath);
+      }
+    }
+    catch(...) {
+      for(auto& map : _maps) map = UioMap{};
+      ::close(_deviceFileDescriptor);
+      throw;
     }
 
     _opened = true;
@@ -145,7 +157,7 @@ namespace ChimeraTK {
   }
 
   bool UioAccess::mapIndexValid(uint64_t map) {
-    return map < _maps_number;
+    return map < _mapsNumber;
   }
 
   void UioAccess::read(uint64_t map, uint64_t address, int32_t* __restrict__ data, size_t sizeInBytes) {
@@ -167,11 +179,6 @@ namespace ChimeraTK {
   }
 
   UioAccess::UioMap& UioAccess::getMap(size_t map) {
-    if(!_maps[map]) [[unlikely]] {
-      std::string uioMapPath = "/sys/class/uio/" + _filename + "/maps/map" + std::to_string(map);
-      _maps[map] = UioAccess::UioMap(_deviceFileDescriptor, map, uioMapPath);
-    }
-
     return _maps[map];
   }
 
