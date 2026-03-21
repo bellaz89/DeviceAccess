@@ -245,6 +245,7 @@ namespace ChimeraTK {
       if(strongPtr) {
         return strongPtr;
       }
+      _existingBackends.erase(iterator);
     }
 
     // Check if descriptor string is a ChimeraTK device descriptor
