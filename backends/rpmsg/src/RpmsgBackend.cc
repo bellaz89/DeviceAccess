@@ -19,6 +19,8 @@
 #include <utility>
 #include <vector>
 
+#define RPMSG_INTERRUPT_PAYLOAD_SIZE_BYTES 4
+
 namespace {
 
   constexpr uint32_t kWriteFlagMask = 0x80000000U;
@@ -242,7 +244,7 @@ namespace ChimeraTK {
   void RpmsgBackend::waitForInterruptLoop(std::promise<void> subscriptionDonePromise) {
     subscriptionDonePromise.set_value();
 
-    std::vector<uint8_t> buffer(4096);
+    std::array<uint8_t, RPMSG_INTERRUPT_PAYLOAD_SIZE_BYTES> buffer{};
     while(!_stopInterruptLoop) {
       try {
         pollfd pfd{};
@@ -263,16 +265,7 @@ namespace ChimeraTK {
           throw ChimeraTK::runtime_error("rpmsg: Interrupt device became unusable.");
         }
 
-        auto bytesRead = ::read(_irqFd, buffer.data(), buffer.size());
-        if(bytesRead < 0) {
-          if(errno == EINTR) {
-            continue;
-          }
-          throwErrno("rpmsg: Reading interrupt message failed");
-        }
-        if(bytesRead == 0) {
-          throw ChimeraTK::runtime_error("rpmsg: Interrupt device reached end of stream.");
-        }
+        readAll(_irqFd, buffer.data(), buffer.size());
 
         if(!isFunctional()) {
           break;
