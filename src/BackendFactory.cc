@@ -16,6 +16,9 @@
 #ifdef CHIMERATK_HAVE_UIO_BACKEND
 #  include "UioBackend.h"
 #endif
+#ifdef CHIMERATK_HAVE_RPMSG_BACKEND
+#  include "RpmsgBackend.h"
+#endif
 #ifdef CHIMERATK_HAVE_DIRECTMAPPING_BACKEND
 #  include "DirectMappingBackend.h"
 #endif
@@ -185,6 +188,9 @@ namespace ChimeraTK {
 #endif
 #ifdef CHIMERATK_HAVE_UIO_BACKEND
     registerBackendType("uio", &UioBackend::createInstance, {"map"});
+#endif
+#ifdef CHIMERATK_HAVE_RPMSG_BACKEND
+    registerBackendType("rpmsg", &RpmsgBackend::createInstance, {"map", "irq"});
 #endif
 #ifdef CHIMERATK_HAVE_DIRECTMAPPING_BACKEND
     registerBackendType("DirectMapping", &DirectMappingBackend::createInstance, {"map", "size", "base"});
