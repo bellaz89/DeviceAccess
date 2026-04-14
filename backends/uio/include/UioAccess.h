@@ -61,6 +61,7 @@ namespace ChimeraTK {
     boost::filesystem::path _deviceFilePath;
     std::string _filename;
     std::array<UioMap, MAX_UIO_MAPS> _maps;
+    std::array<std::string, MAX_UIO_MAPS> _mapPaths;
     uint32_t _lastInterruptCount = 0;
     std::atomic<bool> _opened{false};
     uint8_t _mapsNumber = 0;
@@ -85,6 +86,11 @@ namespace ChimeraTK {
     /// @param map The map to open
     /// @return Reference to the opened map
     UioAccess::UioMap& getMap(size_t map);
+
+    /// @brief Probe the sysfs to discover the number of UIO maps for this device.
+    /// Resolves symlinks in _deviceFilePath and populates _mapsNumber.
+    /// Called at construction time so mapIndexValid() works before open().
+    void discoverMaps();
 
    public:
     explicit UioAccess(const std::string& deviceFilePath);
