@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+            elementFormDefault="qualified">
+
+  <xsd:annotation>
+    <xsd:documentation>
+      XML schema for ChimeraTK LogicalNameMapping xlmap files.
+
+      This schema is derived from the current parser implementation in
+      backends/LogicalNameMapping/src/LogicalNameMapParser.cc and the plugin
+      factory in backends/LogicalNameMapping/src/LNMAccessorPlugin.cc.
+
+      Notes:
+      - Child element order is intentionally flexible because the parser uses
+        name-based lookup rather than positional parsing.
+      - Parameter and target values allow mixed text with embedded
+        &lt;ref&gt;...&lt;/ref&gt; and &lt;par&gt;...&lt;/par&gt; nodes because the parser
+        supports that interpolation style.
+      - The schema validates plugin names, but not plugin-specific parameter
+        names or semantic constraints.
+    </xsd:documentation>
+  </xsd:annotation>
+
+  <xsd:simpleType name="PluginNameType">
+    <xsd:restriction base="xsd:string">
+      <xsd:enumeration value="multiply"/>
+      <xsd:enumeration value="math"/>
+      <xsd:enumeration value="monostableTrigger"/>
+      <xsd:enumeration value="forceReadOnly"/>
+      <xsd:enumeration value="forcePollingRead"/>
+      <xsd:enumeration value="typeHintModifier"/>
+      <xsd:enumeration value="doubleBuffer"/>
+      <xsd:enumeration value="bitRange"/>
+      <xsd:enumeration value="tagModifier"/>
+      <xsd:enumeration value="isStatusOutput"/>
+      <xsd:enumeration value="hasReverseRecovery"/>
+      <xsd:enumeration value="fanOut"/>
+    </xsd:restriction>
+  </xsd:simpleType>
+
+  <xsd:simpleType name="ValueTypeName">
+    <xsd:restriction base="xsd:string">
+      <xsd:enumeration value="int8"/>
+      <xsd:enumeration value="uint8"/>
+      <xsd:enumeration value="int16"/>
+      <xsd:enumeration value="uint16"/>
+      <xsd:enumeration value="int32"/>
+      <xsd:enumeration value="uint32"/>
+      <xsd:enumeration value="int64"/>
+      <xsd:enumeration value="uint64"/>
+      <xsd:enumeration value="float32"/>
+      <xsd:enumeration value="float64"/>
+      <xsd:enumeration value="string"/>
+      <xsd:enumeration value="Boolean"/>
+      <xsd:enumeration value="Void"/>
+      <xsd:enumeration value="integer"/>
+    </xsd:restriction>
+  </xsd:simpleType>
+
+  <xsd:complexType name="InterpolatedStringType" mixed="true">
+    <xsd:choice minOccurs="0" maxOccurs="unbounded">
+      <xsd:element name="ref" type="xsd:string"/>
+      <xsd:element name="par" type="xsd:string"/>
+    </xsd:choice>
+  </xsd:complexType>
+
+  <xsd:complexType name="TypeElement">
+    <xsd:simpleContent>
+      <xsd:extension base="ValueTypeName"/>
+    </xsd:simpleContent>
+  </xsd:complexType>
+
+  <xsd:complexType name="ValueElement" mixed="true">
+    <xsd:choice minOccurs="0" maxOccurs="1">
+      <xsd:element name="ref" type="xsd:string"/>
+      <xsd:element name="par" type="xsd:string"/>
+    </xsd:choice>
+    <xsd:attribute name="index" type="xsd:nonNegativeInteger" use="optional"/>
+  </xsd:complexType>
+
+  <xsd:complexType name="ParameterType">
+    <xsd:complexContent>
+      <xsd:extension base="InterpolatedStringType">
+        <xsd:attribute name="name" type="xsd:string" use="required"/>
+      </xsd:extension>
+    </xsd:complexContent>
+  </xsd:complexType>
+
+  <xsd:complexType name="PluginType">
+    <xsd:sequence>
+      <xsd:element name="parameter" type="ParameterType" minOccurs="0" maxOccurs="unbounded"/>
+    </xsd:sequence>
+    <xsd:attribute name="name" type="PluginNameType" use="required"/>
+  </xsd:complexType>
+
+  <xsd:attributeGroup name="NamedItemAttributeGroup">
+    <xsd:attribute name="name" type="xsd:string" use="required"/>
+  </xsd:attributeGroup>
+
+  <xsd:group name="MapChildGroup">
+    <xsd:choice>
+      <xsd:element name="module" type="ModuleType"/>
+      <xsd:element name="redirectedRegister" type="RedirectedRegisterType"/>
+      <xsd:element name="redirectedChannel" type="RedirectedChannelType"/>
+      <xsd:element name="redirectedBit" type="RedirectedBitType"/>
+      <xsd:element name="constant" type="ConstantType"/>
+      <xsd:element name="variable" type="VariableType"/>
+    </xsd:choice>
+  </xsd:group>
+
+  <xsd:complexType name="ModuleType">
+    <xsd:sequence>
+      <xsd:group ref="MapChildGroup" minOccurs="0" maxOccurs="unbounded"/>
+    </xsd:sequence>
+    <xsd:attributeGroup ref="NamedItemAttributeGroup"/>
+  </xsd:complexType>
+
+  <xsd:complexType name="RedirectedRegisterType">
+    <xsd:choice minOccurs="0" maxOccurs="unbounded">
+      <xsd:element name="targetDevice" type="InterpolatedStringType"/>
+      <xsd:element name="targetRegister" type="InterpolatedStringType"/>
+      <xsd:element name="targetStartIndex" type="InterpolatedStringType"/>
+      <xsd:element name="numberOfElements" type="InterpolatedStringType"/>
+      <xsd:element name="plugin" type="PluginType"/>
+    </xsd:choice>
+    <xsd:attributeGroup ref="NamedItemAttributeGroup"/>
+  </xsd:complexType>
+
+  <xsd:complexType name="RedirectedChannelType">
+    <xsd:choice minOccurs="0" maxOccurs="unbounded">
+      <xsd:element name="targetDevice" type="InterpolatedStringType"/>
+      <xsd:element name="targetRegister" type="InterpolatedStringType"/>
+      <xsd:element name="targetChannel" type="InterpolatedStringType"/>
+      <xsd:element name="targetStartIndex" type="InterpolatedStringType"/>
+      <xsd:element name="numberOfElements" type="InterpolatedStringType"/>
+      <xsd:element name="plugin" type="PluginType"/>
+    </xsd:choice>
+    <xsd:attributeGroup ref="NamedItemAttributeGroup"/>
+  </xsd:complexType>
+
+  <xsd:complexType name="RedirectedBitType">
+    <xsd:choice minOccurs="0" maxOccurs="unbounded">
+      <xsd:element name="targetDevice" type="InterpolatedStringType"/>
+      <xsd:element name="targetRegister" type="InterpolatedStringType"/>
+      <xsd:element name="targetBit" type="InterpolatedStringType"/>
+      <xsd:element name="plugin" type="PluginType"/>
+    </xsd:choice>
+    <xsd:attributeGroup ref="NamedItemAttributeGroup"/>
+  </xsd:complexType>
+
+  <xsd:complexType name="ConstantType">
+    <xsd:choice minOccurs="0" maxOccurs="unbounded">
+      <xsd:element name="type" type="TypeElement"/>
+      <xsd:element name="value" type="ValueElement"/>
+      <xsd:element name="numberOfElements" type="InterpolatedStringType"/>
+      <xsd:element name="plugin" type="PluginType"/>
+    </xsd:choice>
+    <xsd:attributeGroup ref="NamedItemAttributeGroup"/>
+  </xsd:complexType>
+
+  <xsd:complexType name="VariableType">
+    <xsd:choice minOccurs="0" maxOccurs="unbounded">
+      <xsd:element name="type" type="TypeElement"/>
+      <xsd:element name="value" type="ValueElement"/>
+      <xsd:element name="numberOfElements" type="InterpolatedStringType"/>
+      <xsd:element name="plugin" type="PluginType"/>
+    </xsd:choice>
+    <xsd:attributeGroup ref="NamedItemAttributeGroup"/>
+  </xsd:complexType>
+
+  <xsd:element name="logicalNameMap">
+    <xsd:complexType>
+      <xsd:sequence>
+        <xsd:group ref="MapChildGroup" minOccurs="0" maxOccurs="unbounded"/>
+      </xsd:sequence>
+    </xsd:complexType>
+  </xsd:element>
+
+</xsd:schema>

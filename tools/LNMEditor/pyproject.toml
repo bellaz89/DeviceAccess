@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lnm-editor"
+version = "0.1.0"
+description = "Tk editor for ChimeraTK LogicalNameMapping xlmap files"
+requires-python = ">=3.9"
+dependencies = ["xmlschema"]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.scripts]
+lnm-editor = "lnm_editor:main"
+
+[tool.setuptools]
+include-package-data = false
+
+[tool.setuptools.package-data]
+lnm_editor.xmlschema = ["*.xsd"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["lnm_editor*"]
