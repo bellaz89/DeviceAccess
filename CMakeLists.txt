@@ -19,6 +19,7 @@ include(cmake/set_default_build_to_release.cmake)
 include(cmake/set_default_flags.cmake)
 include(cmake/enable_code_coverage_report.cmake)
 include(cmake/add_linter_target.cmake)
+include(GNUInstallDirs)
 
 include(cmake/CheckFileOffsetBits.cmake)
 CHECK_FILE_OFFSET_BITS()
@@ -71,6 +72,12 @@ endif()
 
 # Generate DeviceAccessVersion.h
 configure_file(cmake/DeviceAccessVersion.h.in ${PROJECT_BINARY_DIR}/generated_include/DeviceAccessVersion.h)
+set(CHIMERATK_DEVICEACCESS_LOGICALNAMEMAP_SCHEMA_SOURCE_PATH
+  "${CMAKE_SOURCE_DIR}/backends/LogicalNameMapping/xmlschema/logicalNameMap.xsd")
+set(CHIMERATK_DEVICEACCESS_LOGICALNAMEMAP_SCHEMA_INSTALL_PATH
+  "${CMAKE_INSTALL_FULL_DATADIR}/${PROJECT_NAME}-${${PROJECT_NAME}_SOVERSION}/xmlschema/logicalNameMap.xsd")
+configure_file(cmake/LogicalNameMappingSchemaPaths.h.in
+  ${PROJECT_BINARY_DIR}/generated_include/LogicalNameMappingSchemaPaths.h @ONLY)
 include_directories(${PROJECT_BINARY_DIR}/generated_include)
 install(DIRECTORY ${PROJECT_BINARY_DIR}/generated_include/ DESTINATION include/ChimeraTK)
 
@@ -147,9 +154,6 @@ target_link_libraries(${PROJECT_NAME}
 # do not remove runtime paths of the library when installing (helps for unsually located implicit dependencies)
 set_property(TARGET ${PROJECT_NAME} PROPERTY INSTALL_RPATH_USE_LINK_PATH TRUE)
 
-# this defines architecture-dependent ${CMAKE_INSTALL_LIBDIR}
-include(GNUInstallDirs)
-
 # Generate configuration files for dependencies
 set(${PROJECT_NAME}_MEXFLAGS "-I${CMAKE_INSTALL_PREFIX}/include -L${CMAKE_INSTALL_FULL_LIBDIR} -l${PROJECT_NAME}")
 
@@ -187,3 +191,5 @@ endforeach(toolScripts)
 
 # Install the example source code.
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/examples DESTINATION share/doc/${PROJECT_NAME}-${${PROJECT_NAME}_SOVERSION} COMPONENT doc)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/backends/LogicalNameMapping/xmlschema
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}-${${PROJECT_NAME}_SOVERSION})

@@ -6,12 +6,95 @@
 #include "DeviceBackend.h"
 #include "Exception.h"
 #include "LNMBackendRegisterInfo.h"
+#include "LogicalNameMappingSchemaPaths.h"
 
 #include <libxml++/libxml++.h>
+#include <libxml/xmlerror.h>
+#include <libxml/xmlschemas.h>
 
+#include <array>
+#include <filesystem>
 #include <stdexcept>
 
 namespace ChimeraTK {
+
+  namespace {
+
+    std::string getSchemaErrorMessage(const std::string& fallback) {
+      if(const auto* error = xmlGetLastError()) {
+        std::string message = error->message ? error->message : fallback;
+        while(!message.empty() && (message.back() == '\n' || message.back() == '\r')) {
+          message.pop_back();
+        }
+        return message;
+      }
+      return fallback;
+    }
+
+    std::string findLogicalNameMapSchemaPath() {
+      static const std::array schemaPaths = {
+          std::filesystem::path(CHIMERATK_DEVICEACCESS_LOGICALNAMEMAP_SCHEMA_SOURCE_PATH),
+          std::filesystem::path(CHIMERATK_DEVICEACCESS_LOGICALNAMEMAP_SCHEMA_INSTALL_PATH),
+      };
+
+      for(const auto& path : schemaPaths) {
+        if(std::filesystem::exists(path)) {
+          return path.string();
+        }
+      }
+
+      throw ChimeraTK::logic_error(
+          "LogicalNameMapParser: XML schema file 'logicalNameMap.xsd' could not be found. Looked in '" +
+          schemaPaths[0].string() + "' and '" + schemaPaths[1].string() + "'.");
+    }
+
+    void validateFileAgainstSchema(const std::string& fileName) {
+      xmlResetLastError();
+
+      const auto schemaPath = findLogicalNameMapSchemaPath();
+
+      auto schemaParserContext = xmlSchemaNewParserCtxt(schemaPath.c_str());
+      if(schemaParserContext == nullptr) {
+        throw ChimeraTK::logic_error(
+            "LogicalNameMapParser: Failed to create XML schema parser context for '" + schemaPath + "'.");
+      }
+
+      auto schemaParserContextGuard =
+          cppext::finally([&] { xmlSchemaFreeParserCtxt(schemaParserContext); });
+
+      auto* schema = xmlSchemaParse(schemaParserContext);
+      if(schema == nullptr) {
+        throw ChimeraTK::logic_error("LogicalNameMapParser: Failed to parse XML schema '" + schemaPath +
+                                     "': " + getSchemaErrorMessage("unknown schema parsing error"));
+      }
+
+      auto schemaGuard = cppext::finally([&] { xmlSchemaFree(schema); });
+
+      auto validationContext = xmlSchemaNewValidCtxt(schema);
+      if(validationContext == nullptr) {
+        throw ChimeraTK::logic_error(
+            "LogicalNameMapParser: Failed to create XML schema validation context for '" + schemaPath + "'.");
+      }
+
+      auto validationContextGuard = cppext::finally([&] { xmlSchemaFreeValidCtxt(validationContext); });
+
+      auto* doc = xmlReadFile(fileName.c_str(), nullptr, XML_PARSE_NONET);
+      if(doc == nullptr) {
+        throw ChimeraTK::logic_error(
+            "Error opening the xlmap file '" + fileName + "': " + getSchemaErrorMessage("xmlReadFile() failed"));
+      }
+
+      auto docGuard = cppext::finally([&] { xmlFreeDoc(doc); });
+
+      int validationResult = xmlSchemaValidateDoc(validationContext, doc);
+      if(validationResult != 0) {
+        std::string message = getSchemaErrorMessage("schema validation failed");
+        throw ChimeraTK::logic_error("Error validating the xlmap file '" + fileName + "' against schema '" +
+                                     schemaPath + "': " + message);
+      }
+    }
+
+  } // namespace
 
   template<>
   std::string LogicalNameMapParser::getValueFromXmlSubnode<std::string>(const xmlpp::Node* node,
@@ -263,6 +346,8 @@ namespace ChimeraTK {
     _fileName = fileName;
 
     BackendRegisterCatalogue<LNMBackendRegisterInfo> catalogue;
+
+    validateFileAgainstSchema(fileName);
 
     // parse the file into a DOM structure
     xmlpp::DomParser parser;
