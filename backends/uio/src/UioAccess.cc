@@ -125,16 +125,16 @@ namespace ChimeraTK {
       return; // Device path not accessible yet; _mapsNumber stays 0.
     }
 
-    _fileName = _deviceFilePath.filename().string();
+    _filename = _deviceFilePath.filename().string();
     _mapsNumber = 0;
     while(true) {
-      std::string uioMapPath = std::format("/sys/class/uio/{}/maps/map{}", _fileName, _mapsNumber);
+      std::string uioMapPath = std::format("/sys/class/uio/{}/maps/map{}", _filename, _mapsNumber);
       if(!boost::filesystem::is_directory(uioMapPath)) {
         break;
       }
       if(_mapsNumber >= MAX_UIO_MAPS) {
         throw ChimeraTK::runtime_error(std::format(
-            "UIO: Device '{}' has more than {} UIO maps, which exceeds the supported maximum.", _fileName, MAX_UIO_MAPS));
+            "UIO: Device '{}' has more than {} UIO maps, which exceeds the supported maximum.", _filename, MAX_UIO_MAPS));
       }
       _mapPaths[_mapsNumber] = std::move(uioMapPath);
       _mapsNumber++;
@@ -146,7 +146,7 @@ namespace ChimeraTK {
   }
 
   void UioAccess::open() {
-    _lastInterruptCount = readUint32FromFile(std::format("/sys/class/uio/{}/event", _fileName));
+    _lastInterruptCount = readUint32FromFile(std::format("/sys/class/uio/{}/event", _filename));
 
     // Open UIO device file here, so that interrupt thread can run before calling open()
     _deviceFileDescriptor = ::open(_deviceFilePath.c_str(), O_RDWR);
