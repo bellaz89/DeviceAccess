@@ -103,14 +103,15 @@ namespace ChimeraTK {
       }
       return fd;
     };
-    _fdSyncMode      = openFd("sync_mode",      O_RDWR);
-    _fdSyncDir       = openFd("sync_direction", O_RDWR);
-    _fdSyncOffset    = openFd("sync_offset",    O_RDWR);
-    _fdSyncSize      = openFd("sync_size",      O_RDWR);
-    _fdSyncForCpu    = openFd("sync_for_cpu",   O_WRONLY);
-    _fdSyncForDevice = openFd("sync_for_device",O_WRONLY);
 
     try {
+      _fdSyncMode      = openFd("sync_mode",      O_RDWR);
+      _fdSyncDir       = openFd("sync_direction", O_RDWR);
+      _fdSyncOffset    = openFd("sync_offset",    O_RDWR);
+      _fdSyncSize      = openFd("sync_size",      O_RDWR);
+      _fdSyncForCpu    = openFd("sync_for_cpu",   O_WRONLY);
+      _fdSyncForDevice = openFd("sync_for_device",O_WRONLY);
+
       DirectMappingBackend::open();
     }
     catch(...) {
@@ -182,6 +183,16 @@ namespace ChimeraTK {
 
   /********************************************************************************************************************/
 
+  namespace {
+    void requireSize(size_t actual, size_t expected, uint64_t address, const char* op) {
+      if(actual != expected) {
+        throw ChimeraTK::logic_error("udmabuf: BAR 0xff " + std::string(op) + " at offset " +
+            std::to_string(address) + " requires " + std::to_string(expected) + " bytes, got " +
+            std::to_string(actual) + ".");
+      }
+    }
+  } // namespace
+
   void UDmaBufBackend::read(uint64_t bar, uint64_t address, int32_t* data, size_t sizeInBytes) {
     assert(_opened);
     checkActiveException();
@@ -201,22 +212,22 @@ namespace ChimeraTK {
 
     switch(address) {
       case REG_SYNC_MODE:
-        assert(sizeInBytes == 4);
+        requireSize(sizeInBytes, 4, address, "read");
         *data = static_cast<int32_t>(readSysfsUint64(_fdSyncMode));
         break;
       case REG_SYNC_DIR:
-        assert(sizeInBytes == 4);
+        requireSize(sizeInBytes, 4, address, "read");
         *data = static_cast<int32_t>(readSysfsUint64(_fdSyncDir));
         break;
       case REG_SYNC_OFF: {
-        assert(sizeInBytes == 8);
+        requireSize(sizeInBytes, 8, address, "read");
         auto syncOffset = readSysfsUint64(_fdSyncOffset);
         data[0] = static_cast<int32_t>(syncOffset & 0xFFFFFFFFu);
         data[1] = static_cast<int32_t>(syncOffset >> 32);
         break;
       }
       case REG_SYNC_SIZE: {
-        assert(sizeInBytes == 8);
+        requireSize(sizeInBytes, 8, address, "read");
         auto syncSize = readSysfsUint64(_fdSyncSize);
         data[0] = static_cast<int32_t>(syncSize & 0xFFFFFFFFu);
         data[1] = static_cast<int32_t>(syncSize >> 32);
@@ -224,25 +235,25 @@ namespace ChimeraTK {
       }
       case REG_SYNC_FOR_CPU:
       case REG_SYNC_FOR_DEV:
-        assert(sizeInBytes == 4);
+        requireSize(sizeInBytes, 4, address, "read");
         *data = 0; // write-only registers: return 0
         break;
       case REG_PHYS_ADDR:
-        assert(sizeInBytes == 8);
+        requireSize(sizeInBytes, 8, address, "read");
         data[0] = static_cast<int32_t>(_physAddr & 0xFFFFFFFFu);
         data[1] = static_cast<int32_t>(_physAddr >> 32);
         break;
       case REG_BUF_SIZE:
-        assert(sizeInBytes == 8);
+        requireSize(sizeInBytes, 8, address, "read");
         data[0] = static_cast<int32_t>(static_cast<uint64_t>(_memSize) & 0xFFFFFFFFu);
         data[1] = static_cast<int32_t>(static_cast<uint64_t>(_memSize) >> 32);
         break;
       case REG_SYNC_ON_READ:
-        assert(sizeInBytes == 4);
+        requireSize(sizeInBytes, 4, address, "read");
         *data = _syncOnRead ? 1 : 0;
         break;
       case REG_SYNC_ON_WRITE:
-        assert(sizeInBytes == 4);
+        requireSize(sizeInBytes, 4, address, "read");
         *data = _syncOnWrite ? 1 : 0;
         break;
       default:
@@ -272,37 +283,37 @@ namespace ChimeraTK {
 
     switch(address) {
       case REG_SYNC_MODE:
-        assert(sizeInBytes == 4);
+        requireSize(sizeInBytes, 4, address, "write");
         writeSysfsUint64(_fdSyncMode, static_cast<uint32_t>(*data));
         break;
       case REG_SYNC_DIR:
-        assert(sizeInBytes == 4);
+        requireSize(sizeInBytes, 4, address, "write");
         writeSysfsUint64(_fdSyncDir, static_cast<uint32_t>(*data));
         break;
       case REG_SYNC_OFF:
-        assert(sizeInBytes == 8);
+        requireSize(sizeInBytes, 8, address, "write");
         writeSysfsUint64(_fdSyncOffset, static_cast<uint64_t>(static_cast<uint32_t>(data[0])) |
                                             (static_cast<uint64_t>(static_cast<uint32_t>(data[1])) << 32));
         break;
       case REG_SYNC_SIZE:
-        assert(sizeInBytes == 8);
+        requireSize(sizeInBytes, 8, address, "write");
         writeSysfsUint64(_fdSyncSize, static_cast<uint64_t>(static_cast<uint32_t>(data[0])) |
                                           (static_cast<uint64_t>(static_cast<uint32_t>(data[1])) << 32));
         break;
       case REG_SYNC_FOR_CPU:
-        assert(sizeInBytes == 4);
+        requireSize(sizeInBytes, 4, address, "write");
         writeSysfsUint64(_fdSyncForCpu, static_cast<uint32_t>(*data));
         break;
       case REG_SYNC_FOR_DEV:
-        assert(sizeInBytes == 4);
+        requireSize(sizeInBytes, 4, address, "write");
         writeSysfsUint64(_fdSyncForDevice, static_cast<uint32_t>(*data));
         break;
       case REG_SYNC_ON_READ:
-        assert(sizeInBytes == 4);
+        requireSize(sizeInBytes, 4, address, "write");
         _syncOnRead = (*data != 0);
         break;
       case REG_SYNC_ON_WRITE:
-        assert(sizeInBytes == 4);
+        requireSize(sizeInBytes, 4, address, "write");
         _syncOnWrite = (*data != 0);
         break;
       case REG_PHYS_ADDR:
