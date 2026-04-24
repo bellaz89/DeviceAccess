@@ -89,30 +89,36 @@ namespace ChimeraTK {
           "DirectMapping: Failed to open device file '" + _devicePath + "': " + std::strerror(errno));
     }
 
-    _memSize = discoverSize();
-    _baseAddress = discoverBaseAddress();
+    try {
+      _memSize = discoverSize();
+      _baseAddress = discoverBaseAddress();
 
-    _mem = mmap(nullptr, _memSize, PROT_READ | PROT_WRITE, MAP_SHARED, _fd, 0);
-    if(_mem == MAP_FAILED) {
-      _mem = nullptr;
-      ::close(_fd);
-      _fd = -1;
-      throw ChimeraTK::runtime_error("DirectMapping: mmap failed for '" + _devicePath + "': " + std::strerror(errno));
+      _mem = mmap(nullptr, _memSize, PROT_READ | PROT_WRITE, MAP_SHARED, _fd, 0);
+      if(_mem == MAP_FAILED) {
+        _mem = nullptr;
+        throw ChimeraTK::runtime_error(
+            "DirectMapping: mmap failed for '" + _devicePath + "': " + std::strerror(errno));
+      }
+    }
+    catch(...) {
+      closeImpl();
+      throw;
     }
 
     setOpenedAndClearException();
   }
 
   void DirectMappingBackend::closeImpl() {
-    if(_opened) {
-      if(_mem != nullptr) {
-        munmap(_mem, _memSize);
-        _mem = nullptr;
-      }
-      if(_fd >= 0) {
-        ::close(_fd);
-        _fd = -1;
-      }
+    // Not gated on _opened: open() may throw partway through after _fd is set but
+    // before setOpenedAndClearException() has run, and the catch handler relies on
+    // closeImpl() to release those partially-acquired resources.
+    if(_mem != nullptr) {
+      munmap(_mem, _memSize);
+      _mem = nullptr;
+    }
+    if(_fd >= 0) {
+      ::close(_fd);
+      _fd = -1;
     }
     _opened = false;
   }
@@ -127,6 +133,9 @@ namespace ChimeraTK {
     checkActiveException();
 
     (void)bar;
+    if(address < _baseAddress) {
+      throw ChimeraTK::logic_error("DirectMapping: Read address is below the configured base address.");
+    }
     address -= _baseAddress;
     if(address + sizeInBytes > _memSize) {
       throw ChimeraTK::logic_error("DirectMapping: Read request exceeds device memory region.");
@@ -140,6 +149,9 @@ namespace ChimeraTK {
     checkActiveException();
 
     (void)bar;
+    if(address < _baseAddress) {
+      throw ChimeraTK::logic_error("DirectMapping: Write address is below the configured base address.");
+    }
     address -= _baseAddress;
     if(address + sizeInBytes > _memSize) {
       throw ChimeraTK::logic_error("DirectMapping: Write request exceeds device memory region.");
