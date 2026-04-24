@@ -19,10 +19,9 @@
 #include <utility>
 #include <vector>
 
-#define RPMSG_INTERRUPT_PAYLOAD_SIZE_BYTES 4
-
 namespace {
 
+  constexpr size_t kRpmsgInterruptPayloadSizeBytes = 4;
   constexpr uint32_t kWriteFlagMask = 0x80000000U;
 
   std::string normaliseDevicePath(const std::string& deviceName) {
@@ -161,6 +160,7 @@ namespace ChimeraTK {
       _stopInterruptLoop = true;
       _interruptWaitingThread.join();
     }
+    _interruptThreadFinished = false;
 
     _asyncDomain.reset();
     closeFd(_irqFd);
@@ -219,6 +219,14 @@ namespace ChimeraTK {
       return subscriptionDoneFuture;
     }
 
+    // If a previous interrupt thread exited early (e.g. on runtime_error) it stays
+    // joinable() until explicitly joined. Harvest it here so the subscription can
+    // be restarted instead of silently no-opping.
+    if(_interruptWaitingThread.joinable() && _interruptThreadFinished.load()) {
+      _interruptWaitingThread.join();
+      _interruptThreadFinished = false;
+    }
+
     if(_interruptWaitingThread.joinable()) {
       subscriptionDonePromise.set_value();
       return subscriptionDoneFuture;
@@ -244,7 +252,7 @@ namespace ChimeraTK {
   void RpmsgBackend::waitForInterruptLoop(std::promise<void> subscriptionDonePromise) {
     subscriptionDonePromise.set_value();
 
-    std::array<uint8_t, RPMSG_INTERRUPT_PAYLOAD_SIZE_BYTES> buffer{};
+    std::array<uint8_t, kRpmsgInterruptPayloadSizeBytes> buffer{};
     while(!_stopInterruptLoop) {
       try {
         pollfd pfd{};
@@ -278,6 +286,8 @@ namespace ChimeraTK {
         break;
       }
     }
+
+    _interruptThreadFinished = true;
   }
 
 } // namespace ChimeraTK

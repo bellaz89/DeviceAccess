@@ -55,6 +55,10 @@ namespace ChimeraTK {
 
     std::thread _interruptWaitingThread;
     std::atomic<bool> _stopInterruptLoop{false};
+    /// Set by waitForInterruptLoop() just before it returns, so activateSubscription()
+    /// can distinguish a still-running thread from one that exited early (e.g. on
+    /// runtime_error) and needs to be re-spawned.
+    std::atomic<bool> _interruptThreadFinished{false};
     boost::shared_ptr<async::DomainImpl<std::nullptr_t>> _asyncDomain;
 
     void waitForInterruptLoop(std::promise<void> subscriptionDonePromise);
