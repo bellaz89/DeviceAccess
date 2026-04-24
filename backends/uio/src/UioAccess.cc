@@ -16,7 +16,6 @@
 #include <cerrno>
 #include <format>
 #include <fstream>
-#include <limits>
 #include <utility>
 
 namespace ChimeraTK {
@@ -146,6 +145,17 @@ namespace ChimeraTK {
   }
 
   void UioAccess::open() {
+    if(_mapsNumber == 0) {
+      // The device was not yet accessible (or had no discoverable maps) at construction
+      // time. Retry discovery now so devices that appeared after the backend was
+      // instantiated can still be opened successfully.
+      discoverMaps();
+      if(_mapsNumber == 0) {
+        throw ChimeraTK::runtime_error(
+            std::format("UIO: No UIO maps found for device '{}'", _deviceFilePath.string()));
+      }
+    }
+
     _lastInterruptCount = readUint32FromFile(std::format("/sys/class/uio/{}/event", _filename));
 
     // Open UIO device file here, so that interrupt thread can run before calling open()
@@ -241,7 +251,7 @@ namespace ChimeraTK {
     ssize_t ret = ::write(_deviceFileDescriptor, &unmask, sizeof(unmask));
 
     if(ret != (ssize_t)sizeof(unmask)) {
-      throw ChimeraTK::runtime_error(std::format("UIO - Waiting for interrupt failed: {}", std::strerror(errno)));
+      throw ChimeraTK::runtime_error(std::format("UIO - Clearing interrupts failed: {}", std::strerror(errno)));
     }
   }
 
@@ -250,33 +260,33 @@ namespace ChimeraTK {
   }
 
   uint32_t UioAccess::subtractUint32OverflowSafe(uint32_t minuend, uint32_t subtrahend) {
-    if(subtrahend > minuend) {
-      return minuend +
-          (uint32_t)(static_cast<uint64_t>(std::numeric_limits<uint32_t>::max()) - static_cast<uint64_t>(subtrahend));
-    }
-    else {
-      return minuend - subtrahend;
-    }
+    // uint32_t arithmetic is defined to wrap modulo 2^32, which gives the correct
+    // number of interrupts even when the kernel counter has wrapped around.
+    return minuend - subtrahend;
   }
 
   uint32_t UioAccess::readUint32FromFile(std::string fileName) {
-    uint64_t value = 0;
     std::ifstream inputFile(fileName);
+    if(!inputFile.is_open()) {
+      throw ChimeraTK::runtime_error(std::format("UIO: Cannot open '{}' for reading", fileName));
+    }
 
-    if(inputFile.is_open()) {
-      inputFile >> value;
-      inputFile.close();
+    uint64_t value = 0;
+    if(!(inputFile >> value)) {
+      throw ChimeraTK::runtime_error(std::format("UIO: Failed to parse integer from '{}'", fileName));
     }
     return (uint32_t)value;
   }
 
   uint64_t UioAccess::readUint64HexFromFile(std::string fileName) {
-    uint64_t value = 0;
     std::ifstream inputFile(fileName);
+    if(!inputFile.is_open()) {
+      throw ChimeraTK::runtime_error(std::format("UIO: Cannot open '{}' for reading", fileName));
+    }
 
-    if(inputFile.is_open()) {
-      inputFile >> std::hex >> value;
-      inputFile.close();
+    uint64_t value = 0;
+    if(!(inputFile >> std::hex >> value)) {
+      throw ChimeraTK::runtime_error(std::format("UIO: Failed to parse hex integer from '{}'", fileName));
     }
     return value;
   }
