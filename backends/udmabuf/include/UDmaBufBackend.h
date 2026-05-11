@@ -21,22 +21,20 @@ namespace ChimeraTK {
    *
    * In addition to the mmap'd DMA buffer on BAR 0, a virtual register bank on
    * BAR 0xff maps u-dma-buf sysfs control attributes as ChimeraTK registers
-   * under the module path "u-dma-buf":
+   * under the module path "udma":
    *
-   * | Register               | Offset | Elements | Access |
-   * |------------------------|--------|----------|--------|
-   * | Register                | Offset | Width | Access |
-   * |-------------------------|--------|-------|--------|
-   * | u-dma-buf/sync_mode     | 0x00   | 32    | RW     |
-   * | u-dma-buf/sync_dir      | 0x04   | 32    | RW     |
-   * | u-dma-buf/sync_offset   | 0x08   | 64    | RW     |
-   * | u-dma-buf/sync_size     | 0x10   | 64    | RW     |
-   * | u-dma-buf/sync_for_cpu  | 0x18   | 32    | WO     |
-   * | u-dma-buf/sync_for_dev  | 0x1C   | 32    | WO     |
-   * | u-dma-buf/phys_addr     | 0x20   | 64    | RO     |
-   * | u-dma-buf/size          | 0x28   | 64    | RO     |
-   * | u-dma-buf/sync_on_read  | 0x30   | 32    | RW     |
-   * | u-dma-buf/sync_on_write | 0x34   | 32    | RW     |
+   * | Register              | Offset | Width | Access |
+   * |-----------------------|--------|-------|--------|
+   * | udma/sync_mode        | 0x00   | 32    | RW     |
+   * | udma/sync_dir         | 0x04   | 32    | RW     |
+   * | udma/sync_offset      | 0x08   | 64    | RW     |
+   * | udma/sync_size        | 0x10   | 64    | RW     |
+   * | udma/sync_for_cpu     | 0x18   | 32    | WO     |
+   * | udma/sync_for_dev     | 0x1C   | 32    | WO     |
+   * | udma/phys_addr        | 0x20   | 64    | RO     |
+   * | udma/size             | 0x28   | 64    | RO     |
+   * | udma/sync_on_read     | 0x30   | 32    | RW     |
+   * | udma/sync_on_write    | 0x34   | 32    | RW     |
    *
    * 64-bit attributes (sync_offset, sync_size, phys_addr, size) are native
    * int64_t scalars. The 32-bit buffer passed to read()/write() holds the
@@ -47,7 +45,7 @@ namespace ChimeraTK {
    * When sync_on_write is non-zero, every BAR 0 write is followed by a
    * sync_for_device trigger (cache flush) so the device sees data written by the CPU.
    *
-   * CDD format: (u-dma-buf:udmabuf0?map=mymap.map)
+   * CDD format: (udma:udmabuf0?map=mymap.map)
    *   - address : u-dma-buf device name without /dev/ prefix (e.g. udmabuf0),
    *               or a udev symlink name
    *   - map     : register map file (optional)

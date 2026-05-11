@@ -47,7 +47,7 @@ namespace ChimeraTK {
     auto addReg = [this](const std::string& name, uint64_t address, uint32_t width, Access access) {
       uint32_t nBytes = width / 8;
       _registerMap.addRegister(NumericAddressedRegisterInfo(
-          RegisterPath("/u-dma-buf") / name, 1, address, nBytes, BAR_SYSFS, width, 0, false, access));
+          RegisterPath("/udma") / name, 1, address, nBytes, BAR_SYSFS, width, 0, false, access));
     };
 
     addReg("sync_mode",       REG_SYNC_MODE,     32, Access::READ_WRITE);

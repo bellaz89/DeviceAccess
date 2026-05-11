@@ -196,7 +196,7 @@ namespace ChimeraTK {
     registerBackendType("DirectMapping", &DirectMappingBackend::createInstance, {"map", "size", "base"});
 #endif
 #ifdef CHIMERATK_HAVE_UDMABUF_BACKEND
-    registerBackendType("u-dma-buf", &UDmaBufBackend::createInstance, {"map"});
+    registerBackendType("udma", &UDmaBufBackend::createInstance, {"map"});
 #endif
     registerBackendType("dummy", &DummyBackend::createInstance, {"map"});
     registerBackendType("rebot", &RebotBackend::createInstance, {"ip", "port", "map", "timeout"});
