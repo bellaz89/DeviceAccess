@@ -146,9 +146,11 @@ namespace ChimeraTK {
     if(!f.is_open()) {
       throw ChimeraTK::runtime_error("udmabuf: Cannot open sysfs attribute '" + path + "'.");
     }
-    uint64_t value = 0;
-    f >> std::dec >> value;
-    return value;
+    std::string s;
+    f >> s;
+    // sysfs attributes may use decimal (e.g. size) or hex with 0x prefix
+    // (e.g. phys_addr); use base 0 to auto-detect.
+    return std::stoull(s, nullptr, 0);
   }
 
   /********************************************************************************************************************/
