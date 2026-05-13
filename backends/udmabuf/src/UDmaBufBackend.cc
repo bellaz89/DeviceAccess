@@ -163,7 +163,8 @@ namespace ChimeraTK {
           "udmabuf: pread from sysfs fd failed: " + std::string(std::strerror(errno)));
     }
     buf[n] = '\0';
-    return std::strtoull(buf, nullptr, 10);
+    // Use base 0 to handle both decimal and 0x-prefixed hex (e.g. sync_offset).
+    return std::strtoull(buf, nullptr, 0);
   }
 
   /********************************************************************************************************************/
