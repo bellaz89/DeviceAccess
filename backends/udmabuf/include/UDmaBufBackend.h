@@ -19,9 +19,13 @@ namespace ChimeraTK {
    * resolved transparently. Map file register addresses are treated as byte offsets
    * relative to the start of the DMA buffer (i.e. relative to its physical base address).
    *
-   * In addition to the mmap'd DMA buffer on BAR 0, a virtual register bank on
-   * BAR 0xff maps u-dma-buf sysfs control attributes as ChimeraTK registers
-   * under the module path "udma":
+   * DMA buffer data is accessed via pread/pwrite (inherited from DirectMappingBackend),
+   * which go through the kernel's VFS read/write path. The u-dma-buf driver handles
+   * cache synchronisation internally in its file_operations.read/write, so no explicit
+   * sync_for_cpu/sync_for_device calls are needed from userspace.
+   *
+   * A virtual register bank on BAR 0xff maps u-dma-buf sysfs control attributes as
+   * ChimeraTK registers under the module path "udma":
    *
    * | Register              | Offset | Width | Access |
    * |-----------------------|--------|-------|--------|
@@ -33,17 +37,10 @@ namespace ChimeraTK {
    * | udma/sync_for_dev     | 0x1C   | 32    | WO     |
    * | udma/phys_addr        | 0x20   | 64    | RO     |
    * | udma/size             | 0x28   | 64    | RO     |
-   * | udma/sync_on_read     | 0x30   | 32    | RW     |
-   * | udma/sync_on_write    | 0x34   | 32    | RW     |
    *
    * 64-bit attributes (sync_offset, sync_size, phys_addr, size) are native
    * int64_t scalars. The 32-bit buffer passed to read()/write() holds the
    * lo word at data[0] and the hi word at data[1] (little-endian).
-   *
-   * When sync_on_read is non-zero, every BAR 0 read is preceded by a sync_for_cpu
-   * trigger (cache invalidation) so the CPU sees data written by the device.
-   * When sync_on_write is non-zero, every BAR 0 write is followed by a
-   * sync_for_device trigger (cache flush) so the device sees data written by the CPU.
    *
    * CDD format: (udma:udmabuf0?map=mymap.map)
    *   - address : u-dma-buf device name without /dev/ prefix (e.g. udmabuf0),
@@ -53,11 +50,6 @@ namespace ChimeraTK {
   class UDmaBufBackend : public DirectMappingBackend {
     std::string _sysfsBase; ///< Base sysfs path, resolved from device number at open() time
     uint64_t _physAddr{0};  ///< Physical base address of the DMA buffer, read from sysfs at open() time
-
-    /// When true, every BAR 0 read is preceded by a sync_for_cpu trigger (cache invalidation)
-    bool _syncOnRead{false};
-    /// When true, every BAR 0 write is followed by a sync_for_device trigger (cache flush)
-    bool _syncOnWrite{false};
 
     /// Persistent file descriptors for sysfs RW/WO attributes, open for the lifetime of the device connection
     int _fdSyncMode{-1};

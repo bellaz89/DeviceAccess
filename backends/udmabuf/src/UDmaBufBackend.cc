@@ -24,19 +24,17 @@ namespace ChimeraTK {
   static constexpr uint64_t BAR_SYSFS = 0xff;
 
   // BAR_SYSFS total size
-  static constexpr size_t BAR_SYSFS_SIZE = 0x38;
+  static constexpr size_t BAR_SYSFS_SIZE = 0x30;
 
   // BAR 0xff register offsets
-  static constexpr uint64_t REG_SYNC_MODE     = 0x00; // 32-bit
-  static constexpr uint64_t REG_SYNC_DIR      = 0x04; // 32-bit
-  static constexpr uint64_t REG_SYNC_OFF      = 0x08; // 64-bit
-  static constexpr uint64_t REG_SYNC_SIZE     = 0x10; // 64-bit
-  static constexpr uint64_t REG_SYNC_FOR_CPU  = 0x18; // 32-bit
-  static constexpr uint64_t REG_SYNC_FOR_DEV  = 0x1C; // 32-bit
-  static constexpr uint64_t REG_PHYS_ADDR     = 0x20; // 64-bit
-  static constexpr uint64_t REG_BUF_SIZE      = 0x28; // 64-bit
-  static constexpr uint64_t REG_SYNC_ON_READ  = 0x30; // 32-bit
-  static constexpr uint64_t REG_SYNC_ON_WRITE = 0x34; // 32-bit
+  static constexpr uint64_t REG_SYNC_MODE    = 0x00; // 32-bit
+  static constexpr uint64_t REG_SYNC_DIR     = 0x04; // 32-bit
+  static constexpr uint64_t REG_SYNC_OFF     = 0x08; // 64-bit
+  static constexpr uint64_t REG_SYNC_SIZE    = 0x10; // 64-bit
+  static constexpr uint64_t REG_SYNC_FOR_CPU = 0x18; // 32-bit
+  static constexpr uint64_t REG_SYNC_FOR_DEV = 0x1C; // 32-bit
+  static constexpr uint64_t REG_PHYS_ADDR    = 0x20; // 64-bit
+  static constexpr uint64_t REG_BUF_SIZE     = 0x28; // 64-bit
 
   /********************************************************************************************************************/
 
@@ -58,8 +56,6 @@ namespace ChimeraTK {
     addReg("sync_for_device", REG_SYNC_FOR_DEV,  32, Access::WRITE_ONLY);
     addReg("phys_addr",       REG_PHYS_ADDR,     64, Access::READ_ONLY);
     addReg("size",            REG_BUF_SIZE,      64, Access::READ_ONLY);
-    addReg("sync_on_read",    REG_SYNC_ON_READ,  32, Access::READ_WRITE);
-    addReg("sync_on_write",   REG_SYNC_ON_WRITE, 32, Access::READ_WRITE);
   }
 
   /********************************************************************************************************************/
@@ -201,9 +197,6 @@ namespace ChimeraTK {
     checkActiveException();
 
     if(bar != BAR_SYSFS) {
-      if(_syncOnRead) {
-        writeSysfsUint64(_fdSyncForCpu, 1);
-      }
       DirectMappingBackend::read(bar, address, data, sizeInBytes);
       return;
     }
@@ -251,14 +244,6 @@ namespace ChimeraTK {
         data[0] = static_cast<int32_t>(static_cast<uint64_t>(_memSize) & 0xFFFFFFFFu);
         data[1] = static_cast<int32_t>(static_cast<uint64_t>(_memSize) >> 32);
         break;
-      case REG_SYNC_ON_READ:
-        requireSize(sizeInBytes, 4, address, "read");
-        *data = _syncOnRead ? 1 : 0;
-        break;
-      case REG_SYNC_ON_WRITE:
-        requireSize(sizeInBytes, 4, address, "read");
-        *data = _syncOnWrite ? 1 : 0;
-        break;
       default:
         throw ChimeraTK::logic_error(
             "udmabuf: BAR 0xff read from unknown register offset " + std::to_string(address));
@@ -273,9 +258,6 @@ namespace ChimeraTK {
 
     if(bar != BAR_SYSFS) {
       DirectMappingBackend::write(bar, address, data, sizeInBytes);
-      if(_syncOnWrite) {
-        writeSysfsUint64(_fdSyncForDevice, 1);
-      }
       return;
     }
 
@@ -310,14 +292,6 @@ namespace ChimeraTK {
       case REG_SYNC_FOR_DEV:
         requireSize(sizeInBytes, 4, address, "write");
         writeSysfsUint64(_fdSyncForDevice, static_cast<uint32_t>(*data));
-        break;
-      case REG_SYNC_ON_READ:
-        requireSize(sizeInBytes, 4, address, "write");
-        _syncOnRead = (*data != 0);
-        break;
-      case REG_SYNC_ON_WRITE:
-        requireSize(sizeInBytes, 4, address, "write");
-        _syncOnWrite = (*data != 0);
         break;
       case REG_PHYS_ADDR:
       case REG_BUF_SIZE:

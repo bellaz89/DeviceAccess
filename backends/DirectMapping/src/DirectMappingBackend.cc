@@ -5,10 +5,10 @@
 
 #include "Exception.h"
 
-#include <sys/mman.h>
 #include <sys/stat.h>
 
 #include <fcntl.h>
+#include <unistd.h>
 
 #include <cassert>
 #include <cerrno>
@@ -92,13 +92,6 @@ namespace ChimeraTK {
     try {
       _memSize = discoverSize();
       _baseAddress = discoverBaseAddress();
-
-      _mem = mmap(nullptr, _memSize, PROT_READ | PROT_WRITE, MAP_SHARED, _fd, 0);
-      if(_mem == MAP_FAILED) {
-        _mem = nullptr;
-        throw ChimeraTK::runtime_error(
-            "DirectMapping: mmap failed for '" + _devicePath + "': " + std::strerror(errno));
-      }
     }
     catch(...) {
       closeImpl();
@@ -112,10 +105,6 @@ namespace ChimeraTK {
     // Not gated on _opened: open() may throw partway through after _fd is set but
     // before setOpenedAndClearException() has run, and the catch handler relies on
     // closeImpl() to release those partially-acquired resources.
-    if(_mem != nullptr) {
-      munmap(_mem, _memSize);
-      _mem = nullptr;
-    }
     if(_fd >= 0) {
       ::close(_fd);
       _fd = -1;
@@ -141,7 +130,10 @@ namespace ChimeraTK {
       throw ChimeraTK::logic_error("DirectMapping: Read request exceeds device memory region.");
     }
 
-    ::memcpy(data, static_cast<char*>(_mem) + address, sizeInBytes);
+    if(::pread(_fd, data, sizeInBytes, static_cast<off_t>(address)) != static_cast<ssize_t>(sizeInBytes)) {
+      throw ChimeraTK::runtime_error(
+          "DirectMapping: pread failed for '" + _devicePath + "': " + std::strerror(errno));
+    }
   }
 
   void DirectMappingBackend::write(uint64_t bar, uint64_t address, int32_t const* data, size_t sizeInBytes) {
@@ -157,7 +149,10 @@ namespace ChimeraTK {
       throw ChimeraTK::logic_error("DirectMapping: Write request exceeds device memory region.");
     }
 
-    ::memcpy(static_cast<char*>(_mem) + address, data, sizeInBytes);
+    if(::pwrite(_fd, data, sizeInBytes, static_cast<off_t>(address)) != static_cast<ssize_t>(sizeInBytes)) {
+      throw ChimeraTK::runtime_error(
+          "DirectMapping: pwrite failed for '" + _devicePath + "': " + std::strerror(errno));
+    }
   }
 
   std::string DirectMappingBackend::readDeviceInfo() {

@@ -11,12 +11,11 @@
 namespace ChimeraTK {
 
   /**
-   * Backend for memory-mapped device files (Linux only).
+   * Backend for device files accessible via pread/pwrite (Linux only).
    *
-   * Opens any device file, mmaps it into the process address space, and
-   * performs register read/write via memcpy. Map file addresses are treated
-   * as absolute system addresses; the base address is subtracted before
-   * each access.
+   * Opens any device file and performs register read/write via pread/pwrite.
+   * Map file addresses are treated as absolute system addresses; the base
+   * address is subtracted before each access.
    *
    * CDD format: (DirectMapping:/dev/mydev?map=mymap.map&size=0x100000&base=0xA0000000)
    *   - address : device file path (e.g. /dev/mydev)
@@ -30,8 +29,7 @@ namespace ChimeraTK {
     size_t _sizeParam;           ///< Buffer size from CDD 'size' parameter (0 = not given)
     uint64_t _baseAddrParam;     ///< Base address from CDD 'base' parameter (0 = not given)
     int _fd = -1;                ///< File descriptor for the opened device file
-    void* _mem = nullptr;        ///< Pointer to the mmap'd region
-    size_t _memSize = 0;         ///< Actual mapped size in bytes
+    size_t _memSize = 0;         ///< Device size in bytes
     uint64_t _baseAddress = 0;   ///< Base physical address, determined at open time
 
     /**
